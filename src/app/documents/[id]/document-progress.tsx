@@ -27,30 +27,25 @@ const progressStages = [
 export function DocumentProgress({ documentId }: DocumentProgressProps) {
     const router = useRouter();
 
-    const { data: progress, error } = api.document.getProgress.useQuery(
+    const { data: progress } = api.document.getProgress.useQuery(
         { documentId },
         {
-            refetchInterval: (data) => {
-                // Stop polling if completed or failed
-                if (data?.status === "completed" || data?.status === "failed") {
-                    return false;
-                }
-                return 2000; // Poll every 2 seconds
-            },
-            onSuccess: (data) => {
-                // Refresh page when generation completes
-                if (data.status === "completed") {
-                    setTimeout(() => {
-                        router.refresh();
-                    }, 1000);
-                }
-            },
+            refetchInterval: 2000,
         }
     );
 
-    const currentStage = progressStages.find(
-        (stage) => (progress?.progress ?? 0) <= stage.value
-    ) || progressStages[0];
+    // Refresh page when generation completes
+    useEffect(() => {
+        if (progress?.status === "completed") {
+            const id = setTimeout(() => router.refresh(), 1000);
+            return () => clearTimeout(id);
+        }
+    }, [progress?.status, router]);
+
+    const currentStage = (
+        progressStages.find((stage) => (progress?.progress ?? 0) <= stage.value) ??
+        progressStages[0]
+    ) as (typeof progressStages)[number];
 
     const progressValue = progress?.progress ?? 0;
     const status = progress?.status ?? "pending";
@@ -93,9 +88,7 @@ export function DocumentProgress({ documentId }: DocumentProgressProps) {
                                 <span className="text-muted-foreground">{progressValue}%</span>
                             </div>
                             <Progress value={progressValue} className="h-2" />
-                            <p className="text-sm text-muted-foreground">
-                                {currentStage.description}
-                            </p>
+                            <p className="text-sm text-muted-foreground">{currentStage.description}</p>
                         </div>
 
                         <div className="space-y-3">

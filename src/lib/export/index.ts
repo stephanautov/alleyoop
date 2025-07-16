@@ -106,7 +106,7 @@ export async function exportDocument(
     const config = getDocumentConfig(document.type);
 
     // Validate format is supported for this document type
-    if (!config.exportFormats.includes(format.toLowerCase())) {
+    if (!(config.exportFormats as readonly string[]).includes(format.toLowerCase())) {
         throw new Error(
             `Export format ${format} is not supported for ${config.name} documents`
         );
@@ -236,4 +236,3 @@ export function estimateExportSize(
 
 // Re-export types
 export { ExportFormat } from "@prisma/client";
-export type { Exporter } from "./pdf-exporter";

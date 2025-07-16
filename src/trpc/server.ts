@@ -7,7 +7,8 @@ import { headers } from "next/headers";
 import { cache } from "react";
 
 import { createCaller, type AppRouter } from "~/server/api/root";
-import { createTRPCContext } from "~/server/api/trpc";
+import { createInnerTRPCContext } from "~/server/api/trpc";
+import { getServerAuthSession } from "~/server/auth-compat";
 import { createQueryClient } from "./query-client";
 
 /**
@@ -15,12 +16,9 @@ import { createQueryClient } from "./query-client";
  * handling a tRPC call from a React Server Component.
  */
 const createContext = cache(async () => {
-  const heads = new Headers(await headers());
-  heads.set("x-trpc-source", "rsc");
-
-  return createTRPCContext({
-    headers: heads,
-  });
+  // We don't need full Next.js req/res here; just create the inner context
+  const session = await getServerAuthSession();
+  return createInnerTRPCContext({ session });
 });
 
 const getQueryClient = cache(createQueryClient);

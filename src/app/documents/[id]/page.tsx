@@ -47,7 +47,7 @@ export default async function DocumentDetailPage({ params }: PageProps) {
 
     let document;
     try {
-        document = await api.document.getById.query({ id: params.id });
+        document = await api.document.getById({ id: params.id });
     } catch (error) {
         notFound();
     }
@@ -71,7 +71,7 @@ export default async function DocumentDetailPage({ params }: PageProps) {
                 </div>
                 <div className="flex items-center gap-2">
                     {document.status === DocumentStatus.COMPLETED && (
-                        <ExportDropdown documentId={document.id} formats={config.exportFormats} />
+                        <ExportDropdown documentId={document.id} formats={Array.from(config.exportFormats)} />
                     )}
                     <DocumentActions document={document} />
                 </div>

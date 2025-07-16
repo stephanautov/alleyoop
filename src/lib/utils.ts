@@ -236,7 +236,8 @@ export function sanitizeFilename(filename: string): string {
  */
 export function getFileExtension(filename: string): string {
   const parts = filename.split(".");
-  return parts.length > 1 ? parts[parts.length - 1].toLowerCase() : "";
+  const ext = parts.length > 1 ? parts.pop() : "";
+  return ext ? ext.toLowerCase() : "";
 }
 
 /**

@@ -31,7 +31,7 @@ import {
 } from "~/components/ui/dropdown-menu";
 import { formatDistanceToNow } from "date-fns";
 import { getDocumentConfig } from "~/config/documents";
-import { DocumentStatus } from "@prisma/client";
+import { DocumentStatus, type Document } from "@prisma/client";
 
 export default async function DashboardPage() {
     const session = await getServerAuthSession();
@@ -41,9 +41,9 @@ export default async function DashboardPage() {
 
     // Fetch user data
     const [documents, stats, availableTypes] = await Promise.all([
-        api.document.list.query({ pagination: { limit: 10 } }),
-        api.document.getStats.query(),
-        api.document.getAvailableTypes.query(),
+        api.document.list({ pagination: { limit: 10 } }),
+        api.document.getStats(),
+        api.document.getAvailableTypes(),
     ]);
 
     return (
@@ -131,7 +131,7 @@ export default async function DashboardPage() {
                 </CardHeader>
                 <CardContent>
                     <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5">
-                        {availableTypes.map((type) => {
+                        {availableTypes.map((type: any) => {
                             const Icon = getIconComponent(type.icon);
                             return (
                                 <Link key={type.type} href={`/documents/new?type=${type.type}`}>
@@ -177,7 +177,7 @@ export default async function DashboardPage() {
                                 </div>
                             ) : (
                                 <div className="space-y-4">
-                                    {documents.items.map((doc) => (
+                                    {documents.items.map((doc: any) => (
                                         <DocumentCard key={doc.id} document={doc} />
                                     ))}
                                 </div>
@@ -185,26 +185,26 @@ export default async function DashboardPage() {
                         </TabsContent>
                         <TabsContent value="completed" className="space-y-4">
                             {documents.items
-                                .filter((doc) => doc.status === DocumentStatus.COMPLETED)
-                                .map((doc) => (
+                                .filter((doc: any) => doc.status === DocumentStatus.COMPLETED)
+                                .map((doc: any) => (
                                     <DocumentCard key={doc.id} document={doc} />
                                 ))}
                         </TabsContent>
                         <TabsContent value="processing" className="space-y-4">
                             {documents.items
                                 .filter(
-                                    (doc) =>
+                                    (doc: any) =>
                                         doc.status === DocumentStatus.PENDING ||
                                         doc.status === DocumentStatus.PROCESSING
                                 )
-                                .map((doc) => (
+                                .map((doc: any) => (
                                     <DocumentCard key={doc.id} document={doc} />
                                 ))}
                         </TabsContent>
                         <TabsContent value="failed" className="space-y-4">
                             {documents.items
-                                .filter((doc) => doc.status === DocumentStatus.FAILED)
-                                .map((doc) => (
+                                .filter((doc: any) => doc.status === DocumentStatus.FAILED)
+                                .map((doc: any) => (
                                     <DocumentCard key={doc.id} document={doc} />
                                 ))}
                         </TabsContent>
@@ -216,7 +216,7 @@ export default async function DashboardPage() {
 }
 
 // Document Card Component
-function DocumentCard({ document }: { document: any }) {
+function DocumentCard({ document }: { document: Document & { wordCount: number } }) {
     const config = getDocumentConfig(document.type);
     const Icon = getIconComponent(config.icon);
 
@@ -253,7 +253,7 @@ function DocumentCard({ document }: { document: any }) {
         },
     };
 
-    const status = statusConfig[document.status];
+    const status = statusConfig[document.status as DocumentStatus];
     const StatusIcon = status.icon;
 
     return (

@@ -5,14 +5,14 @@
  * Rapidly generate boilerplate code for common patterns
  */
 
+import chalk from "chalk";
 import { Command } from "commander";
-import { generateRouter } from "./generators/router";
+import inquirer from "inquirer";
 import { generateComponent } from "./generators/component";
 import { generateDocumentType } from "./generators/document-type";
-import { generateTest } from "./generators/test";
 import { generateFeature } from "./generators/feature";
-import inquirer from "inquirer";
-import chalk from "chalk";
+import { generateRouter } from "./generators/router";
+import { generateTest } from "./generators/test";
 
 const program = new Command();
 

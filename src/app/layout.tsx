@@ -2,17 +2,16 @@
 
 import "~/styles/globals.css";
 import { Inter } from "next/font/google";
-import { headers } from "next/headers";
 import { TRPCReactProvider } from "~/trpc/react";
 import { Toaster } from "~/components/ui/sonner";
 import { ThemeProvider } from "~/components/theme-provider";
-
+import type { Metadata } from "next";
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-sans",
 });
 
-export const metadata = {
+export const metadata: Metadata = {
   title: "DocuForge - AI-Powered Document Generation",
   description: "Create professional documents with AI assistance",
   icons: [{ rel: "icon", url: "/favicon.ico" }],
@@ -32,7 +31,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <TRPCReactProvider headers={headers()}>
+          <TRPCReactProvider>
             {children}
             <Toaster richColors closeButton />
           </TRPCReactProvider>
@@ -41,6 +40,3 @@ export default function RootLayout({
     </html>
   );
 }
-
-// Theme Provider Component (create this in src/components/theme-provider.tsx)
-// This enables dark mode support
