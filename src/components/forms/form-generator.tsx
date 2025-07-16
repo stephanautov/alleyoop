@@ -383,7 +383,7 @@ function ArrayField<T>({
     config?: any;
 }) {
     const [inputValue, setInputValue] = useState("");
-    const fieldValue = form.watch(fieldName) || [];
+    const fieldValue = form.watch(fieldName) ?? [];
 
     const handleAdd = () => {
         if (inputValue.trim()) {
@@ -456,7 +456,7 @@ export function FormGenerator<T extends z.ZodType<any, any>>({
 }: FormGeneratorProps<T>) {
     const form = useForm<z.infer<T>>({
         resolver: zodResolver(schema),
-        defaultValues: defaultValues as any,
+        defaultValues: defaultValues || {} as any,
     });
 
     const handleSubmit = async (data: z.infer<T>) => {
