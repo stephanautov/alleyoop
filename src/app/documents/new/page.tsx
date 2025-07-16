@@ -180,7 +180,7 @@ export default function NewDocumentPage() {
                                 <FormGenerator
                                     schema={getSchemaForType(selectedType)}
                                     onSubmit={handleSubmit}
-                                    isSubmitting={createDocument.isLoading}
+                                    isSubmitting={createDocument.isPending}
                                     submitText="Generate Document"
                                     fieldConfig={getFieldConfig(selectedType)}
                                 />

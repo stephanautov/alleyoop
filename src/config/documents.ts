@@ -142,7 +142,7 @@ export const grantProposalSchema = baseDocumentSchema.extend({
         "evaluation",
         "budget"
     ]),
-    focusArea: z.string(),
+    focusAreas: z.array(z.string()).default([]),
 });
 
 // Document type configuration map

@@ -140,6 +140,7 @@ function renderField<T extends Record<string, any>>(
                             {isLongText ? (
                                 <Textarea
                                     {...field}
+                                    value={field.value ?? ""}
                                     placeholder={config?.placeholder}
                                     disabled={config?.disabled}
                                     rows={config?.rows || 4}
@@ -147,6 +148,7 @@ function renderField<T extends Record<string, any>>(
                             ) : (
                                 <Input
                                     {...field}
+                                    value={field.value ?? ""}
                                     type={config?.type ?? "text"}
                                     placeholder={config?.placeholder}
                                     disabled={config?.disabled}
@@ -178,6 +180,7 @@ function renderField<T extends Record<string, any>>(
                         <FormControl>
                             <Input
                                 {...field}
+                                value={field.value ?? ""}
                                 type="number"
                                 placeholder={config?.placeholder}
                                 disabled={config?.disabled}
@@ -360,7 +363,7 @@ function renderField<T extends Record<string, any>>(
                         {!isOptional && <span className="text-red-500 ml-1">*</span>}
                     </FormLabel>
                     <FormControl>
-                        <Input {...field} disabled={config?.disabled} />
+                        <Input {...field} value={field.value ?? ""} disabled={config?.disabled} />
                     </FormControl>
                     <FormMessage />
                 </FormItem>
