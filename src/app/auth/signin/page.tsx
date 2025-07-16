@@ -1,3 +1,5 @@
+//src/app/auth/signin/page.tsx
+
 "use client";
 
 import { signIn } from "next-auth/react";
@@ -15,7 +17,7 @@ import { toast } from "sonner";
 
 export default function SignInPage() {
     const searchParams = useSearchParams();
-    const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
+    const callbackUrl = searchParams.get("callbackUrl") ?? "/dashboard";
     const error = searchParams.get("error");
 
     const [email, setEmail] = useState("");

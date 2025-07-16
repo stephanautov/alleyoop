@@ -1,3 +1,5 @@
+//src/app/documents/[id]/document-actions.tsx
+
 "use client";
 
 import { useState } from "react";
@@ -39,7 +41,7 @@ export function DocumentActions({ document }: DocumentActionsProps) {
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
 
-    const utils = api.useContext();
+    const utils = api.useUtils();
 
     const deleteDocument = api.document.delete.useMutation({
         onSuccess: () => {
@@ -47,7 +49,7 @@ export function DocumentActions({ document }: DocumentActionsProps) {
             router.push("/dashboard");
         },
         onError: (error) => {
-            toast.error(error.message || "Failed to delete document");
+            toast.error(error.message ?? "Failed to delete document");
             setIsDeleting(false);
         },
     });
@@ -58,7 +60,7 @@ export function DocumentActions({ document }: DocumentActionsProps) {
             router.refresh();
         },
         onError: (error) => {
-            toast.error(error.message || "Failed to retry document");
+            toast.error(error.message ?? "Failed to retry document");
         },
     });
 
@@ -68,7 +70,7 @@ export function DocumentActions({ document }: DocumentActionsProps) {
             router.refresh();
         },
         onError: (error) => {
-            toast.error(error.message || "Failed to cancel document");
+            toast.error(error.message ?? "Failed to cancel document");
         },
     });
 

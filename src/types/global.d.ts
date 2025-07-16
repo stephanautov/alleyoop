@@ -1,4 +1,5 @@
 // src/types/global.d.ts
+
 // Add global type definitions
 
 declare global {

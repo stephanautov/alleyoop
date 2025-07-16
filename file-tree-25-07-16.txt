@@ -1,0 +1,174 @@
+├───.next
+├───.vscode
+├───node_modules
+├───prisma
+│   └───schema.prisma
+├───public
+│   ├───exports
+│   └───templates
+├───scripts
+│   └───generate
+│       └───generators
+├───src
+│   ├───app
+│   │   ├───api
+│   │   │   ├───auth
+│   │   │   │   └───[...nextauth]
+│   │   │   └───trpc
+│   │   │       └───[trpc]
+│   │   ├───auth
+│   │   │   └───signin
+│   │   ├───dashboard
+│   │   ├───documents
+│   │   │   ├───new
+│   │   │   └───[id]
+│   │   └───_components
+│   ├───components
+│   │   ├───documents
+│   │   ├───forms
+│   │   └───ui
+│   ├───config
+│   ├───lib
+│   │   ├───ai
+│   │   ├───export
+│   │   └───utils
+│   ├───server
+│   │   ├───api
+│   │   │   ├───generators
+│   │   │   └───routers
+│   │   ├───auth
+│   │   └───queue
+│   │       └───workers
+│   ├───styles
+│   ├───trpc
+│   └───types
+└───uploads
+    └───exports
+
+
+PS C:\Users\seggu\alleyoop\src> tree /f
+Folder PATH listing for volume Windows
+Volume serial number is 5E4E-04C5
+C:.
+│   env.js
+│
+├───app
+│   │   layout.tsx
+│   │   page.tsx
+│   │
+│   ├───api
+│   │   ├───auth
+│   │   │   └───[...nextauth]
+│   │   │           route.ts
+│   │   │
+│   │   └───trpc
+│   │       └───[trpc]
+│   │               route.ts
+│   │
+│   ├───auth
+│   │   └───signin
+│   │           page.tsx
+│   │
+│   ├───dashboard
+│   │       page.tsx
+│   │
+│   ├───documents
+│   │   ├───new
+│   │   │       page.tsx
+│   │   │
+│   │   └───[id]
+│   │           document-actions.tsx
+│   │           document-progress.tsx
+│   │           export-dropdown.tsx
+│   │           page.tsx
+│   │
+│   └───_components
+│           post.tsx
+│
+├───components
+│   │   theme-provider.tsx
+│   │
+│   ├───documents
+│   ├───forms
+│   │       form-generator.tsx
+│   │
+│   └───ui
+│           alert-dialog.tsx
+│           alert.tsx
+│           badge.tsx
+│           button.tsx
+│           calendar.tsx
+│           card.tsx
+│           dialog.tsx
+│           dropdown-menu.tsx
+│           form.tsx
+│           input.tsx
+│           label.tsx
+│           popover.tsx
+│           progress.tsx
+│           select.tsx
+│           separator.tsx
+│           skeleton.tsx
+│           sonner.tsx
+│           switch.tsx
+│           table.tsx
+│           tabs.tsx
+│           textarea.tsx
+│
+├───config
+│       documents.ts
+│
+├───lib
+│   │   utils.ts
+│   │
+│   ├───ai
+│   │       index.ts
+│   │
+│   ├───export
+│   │       docx-exporter.tsx
+│   │       html-exporter.tsx
+│   │       index.ts
+│   │       markdown-exporter.tsx
+│   │       pdf-exporter.tsx
+│   │       txt-exporter.tsx
+│   │
+│   └───utils
+├───server
+│   │   auth-compat.ts
+│   │   auth.txt
+│   │   db.ts
+│   │
+│   ├───api
+│   │   │   root.ts
+│   │   │   trpc.ts
+│   │   │
+│   │   ├───generators
+│   │   │       crud.ts
+│   │   │
+│   │   └───routers
+│   │           document.ts
+│   │           export.ts
+│   │           health.ts
+│   │           post.ts
+│   │           template.ts
+│   │           usage.ts
+│   │           user.ts
+│   │
+│   ├───auth
+│   │       config.ts
+│   │       index.ts
+│   │
+│   └───queue
+│       │   processor.ts
+│       │
+│       └───workers
+├───styles
+│       globals.css
+│
+├───trpc
+│       query-client.ts
+│       react.tsx
+│       server.ts
+│
+└───types
+        global.d.ts

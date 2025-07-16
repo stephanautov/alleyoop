@@ -1,55 +1,57 @@
+//scripts/generate/generators/router.ts
+
 import fs from "fs/promises";
 import path from "path";
 import { formatCode } from "../utils";
 
 interface RouterOptions {
-    model?: string;
-    crud?: boolean;
+  model?: string;
+  crud?: boolean;
 }
 
 export async function generateRouter(name: string, options: RouterOptions) {
-    const routerName = name.toLowerCase();
-    const modelName = options.model || name;
-    const ModelName = modelName.charAt(0).toUpperCase() + modelName.slice(1);
+  const routerName = name.toLowerCase();
+  const modelName = options.model || name;
+  const ModelName = modelName.charAt(0).toUpperCase() + modelName.slice(1);
 
-    const routerPath = path.join(
-        process.cwd(),
-        "src",
-        "server",
-        "api",
-        "routers",
-        `${routerName}.ts`
-    );
+  const routerPath = path.join(
+    process.cwd(),
+    "src",
+    "server",
+    "api",
+    "routers",
+    `${routerName}.ts`
+  );
 
-    let routerContent: string;
+  let routerContent: string;
 
-    if (options.crud && options.model) {
-        // Generate CRUD router using the generator
-        routerContent = generateCrudRouter(routerName, modelName);
-    } else {
-        // Generate basic router
-        routerContent = generateBasicRouter(routerName);
-    }
+  if (options.crud && options.model) {
+    // Generate CRUD router using the generator
+    routerContent = generateCrudRouter(routerName, modelName);
+  } else {
+    // Generate basic router
+    routerContent = generateBasicRouter(routerName);
+  }
 
-    // Ensure directory exists
-    await fs.mkdir(path.dirname(routerPath), { recursive: true });
+  // Ensure directory exists
+  await fs.mkdir(path.dirname(routerPath), { recursive: true });
 
-    // Write router file
-    await fs.writeFile(routerPath, await formatCode(routerContent));
+  // Write router file
+  await fs.writeFile(routerPath, await formatCode(routerContent));
 
-    // Update root router
-    await updateRootRouter(routerName);
+  // Update root router
+  await updateRootRouter(routerName);
 
-    // Generate types if model is provided
-    if (options.model) {
-        await generateTypes(modelName);
-    }
+  // Generate types if model is provided
+  if (options.model) {
+    await generateTypes(modelName);
+  }
 }
 
 function generateCrudRouter(routerName: string, modelName: string): string {
-    const ModelName = modelName.charAt(0).toUpperCase() + modelName.slice(1);
+  const ModelName = modelName.charAt(0).toUpperCase() + modelName.slice(1);
 
-    return `import { z } from "zod";
+  return `import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { createCRUDRouter } from "~/server/api/generators/crud";
 import { TRPCError } from "@trpc/server";
@@ -135,7 +137,7 @@ export const ${routerName}Router = createTRPCRouter({
 }
 
 function generateBasicRouter(routerName: string): string {
-    return `import { z } from "zod";
+  return `import { z } from "zod";
 import { createTRPCRouter, publicProcedure, protectedProcedure } from "~/server/api/trpc";
 
 export const ${routerName}Router = createTRPCRouter({
@@ -196,57 +198,57 @@ export const ${routerName}Router = createTRPCRouter({
 }
 
 async function updateRootRouter(routerName: string) {
-    const rootRouterPath = path.join(
-        process.cwd(),
-        "src",
-        "server",
-        "api",
-        "root.ts"
-    );
+  const rootRouterPath = path.join(
+    process.cwd(),
+    "src",
+    "server",
+    "api",
+    "root.ts"
+  );
 
-    try {
-        let content = await fs.readFile(rootRouterPath, "utf-8");
+  try {
+    let content = await fs.readFile(rootRouterPath, "utf-8");
 
-        // Add import
-        const importStatement = `import { ${routerName}Router } from "./routers/${routerName}";`;
-        const lastImportIndex = content.lastIndexOf("import");
-        const nextLineIndex = content.indexOf("\n", lastImportIndex);
-        content =
-            content.slice(0, nextLineIndex + 1) +
-            importStatement +
-            "\n" +
-            content.slice(nextLineIndex + 1);
+    // Add import
+    const importStatement = `import { ${routerName}Router } from "./routers/${routerName}";`;
+    const lastImportIndex = content.lastIndexOf("import");
+    const nextLineIndex = content.indexOf("\n", lastImportIndex);
+    content =
+      content.slice(0, nextLineIndex + 1) +
+      importStatement +
+      "\n" +
+      content.slice(nextLineIndex + 1);
 
-        // Add to router
-        const routerRegex = /export const appRouter = createTRPCRouter\({([^}]*)}\);/;
-        const match = content.match(routerRegex);
+    // Add to router
+    const routerRegex = /export const appRouter = createTRPCRouter\({([^}]*)}\);/;
+    const match = content.match(routerRegex);
 
-        if (match) {
-            const existingRouters = match[1];
-            const newRouter = `  ${routerName}: ${routerName}Router,\n`;
-            const updatedRouters = existingRouters.trimEnd() + ",\n" + newRouter;
-            content = content.replace(
-                routerRegex,
-                `export const appRouter = createTRPCRouter({${updatedRouters}});`
-            );
-        }
-
-        await fs.writeFile(rootRouterPath, await formatCode(content));
-    } catch (error) {
-        console.warn("Could not update root router automatically. Please add it manually.");
+    if (match) {
+      const existingRouters = match[1];
+      const newRouter = `  ${routerName}: ${routerName}Router,\n`;
+      const updatedRouters = (existingRouters?.trimEnd() ?? "") + ",\n" + newRouter;
+      content = content.replace(
+        routerRegex,
+        `export const appRouter = createTRPCRouter({${updatedRouters}});`
+      );
     }
+
+    await fs.writeFile(rootRouterPath, await formatCode(content));
+  } catch (error) {
+    console.warn("Could not update root router automatically. Please add it manually.");
+  }
 }
 
 async function generateTypes(modelName: string) {
-    const ModelName = modelName.charAt(0).toUpperCase() + modelName.slice(1);
-    const typesPath = path.join(
-        process.cwd(),
-        "src",
-        "types",
-        `${modelName}.ts`
-    );
+  const ModelName = modelName.charAt(0).toUpperCase() + modelName.slice(1);
+  const typesPath = path.join(
+    process.cwd(),
+    "src",
+    "types",
+    `${modelName}.ts`
+  );
 
-    const typesContent = `import { z } from "zod";
+  const typesContent = `import { z } from "zod";
 import type { ${ModelName} } from "@prisma/client";
 
 // Input validation schemas
@@ -269,6 +271,6 @@ export type ${ModelName}WithRelations = ${ModelName} & {
 };
 `;
 
-    await fs.mkdir(path.dirname(typesPath), { recursive: true });
-    await fs.writeFile(typesPath, await formatCode(typesContent));
+  await fs.mkdir(path.dirname(typesPath), { recursive: true });
+  await fs.writeFile(typesPath, await formatCode(typesContent));
 }

@@ -1,3 +1,5 @@
+//src/app/documents/[id]/export-dropdown.tsx
+
 "use client";
 
 import { useState } from "react";
@@ -14,7 +16,7 @@ import { Button } from "~/components/ui/button";
 import { Download, FileText, FileCode, FileIcon, Loader2 } from "lucide-react";
 import { api } from "~/trpc/react";
 import { toast } from "sonner";
-import { ExportFormat } from "@prisma/client";
+import { type ExportFormat } from "@prisma/client";
 
 interface ExportDropdownProps {
     documentId: string;
@@ -50,7 +52,7 @@ export function ExportDropdown({ documentId, formats }: ExportDropdownProps) {
             toast.success(`Document exported as ${exportingFormat?.toUpperCase()}`);
         },
         onError: (error) => {
-            toast.error(error.message || "Failed to export document");
+            toast.error(error.message ?? "Failed to export document");
         },
         onSettled: () => {
             setIsExporting(false);

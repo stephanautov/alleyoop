@@ -1,6 +1,8 @@
+//src/server/api/routers/document.ts
+
 import { z } from "zod";
-import { DocumentStatus, DocumentType } from "@prisma/client";
-import { createTRPCRouter, protectedProcedure, rateLimitedProcedure } from "../trpc";
+import { DocumentStatus, DocumentType, Prisma } from "@prisma/client";
+import { createTRPCRouter, protectedProcedure, rateLimitedProcedure, mergeRouters } from "../trpc";
 import { createCRUDRouter } from "../generators/crud";
 import { TRPCError } from "@trpc/server";
 import {
@@ -61,7 +63,7 @@ const baseCrudRouter = createCRUDRouter({
         }
 
         // Estimate costs
-        const outputLength = validatedInput.outputLength || "medium";
+        const outputLength = validatedInput.outputLength ?? "medium";
         const estimatedTokens = estimateTokenUsage(data.type, outputLength);
         const estimatedCost = estimateCost(estimatedTokens);
 
@@ -107,10 +109,7 @@ const baseCrudRouter = createCRUDRouter({
 });
 
 // Extend with additional document-specific procedures
-export const documentRouter = createTRPCRouter({
-    // Include all CRUD operations
-    ...baseCrudRouter,
-
+const extraDocumentRouter = createTRPCRouter({
     // Get available document types
     getAvailableTypes: protectedProcedure.query(() => {
         return Object.entries(DOCUMENT_CONFIGS)
@@ -150,7 +149,7 @@ export const documentRouter = createTRPCRouter({
                         userId: ctx.session.user.id,
                         type: input.type,
                         title: input.title,
-                        input: input.input,
+                        input: input.input as Prisma.InputJsonValue,
                         status: DocumentStatus.PENDING,
                     },
                 });
@@ -281,8 +280,8 @@ export const documentRouter = createTRPCRouter({
                 where: { id: input.documentId },
                 data: {
                     status: DocumentStatus.PENDING,
-                    sections: null,
-                    outline: null,
+                    sections: undefined,
+                    outline: undefined,
                 },
             });
 
@@ -326,17 +325,19 @@ export const documentRouter = createTRPCRouter({
 
         return {
             total: totalDocuments,
-            byStatus: stats.reduce((acc: { [x: string]: any; }, item: { status: string | number; _count: any; }) => {
+            byStatus: stats.reduce((acc: Record<string, any>, item: { status: string | number; _count: any; }) => {
                 if (!acc[item.status]) acc[item.status] = 0;
                 acc[item.status] += item._count;
                 return acc;
             }, {} as Record<DocumentStatus, number>),
-            byType: stats.reduce((acc: { [x: string]: any; }, item: { type: string | number; _count: any; }) => {
+            byType: stats.reduce((acc: Record<string, any>, item: { type: string | number; _count: any; }) => {
                 if (!acc[item.type]) acc[item.type] = 0;
                 acc[item.type] += item._count;
                 return acc;
             }, {} as Record<DocumentType, number>),
-            totalCost: totalCost._sum.totalCost || 0,
+            totalCost: totalCost._sum.totalCost ?? 0,
         };
     }),
 });
+
+export const documentRouter = mergeRouters(baseCrudRouter, extraDocumentRouter);

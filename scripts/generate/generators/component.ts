@@ -1,73 +1,75 @@
+//scripts/generate/generators/component.ts
+
 import fs from "fs/promises";
 import path from "path";
 import { formatCode } from "../utils";
 
 interface ComponentOptions {
-    type?: "component" | "page" | "form";
-    dir?: string;
+  type?: "component" | "page" | "form";
+  dir?: string;
 }
 
 export async function generateComponent(name: string, options: ComponentOptions) {
-    const componentName = name.charAt(0).toUpperCase() + name.slice(1);
-    const componentType = options.type || "component";
+  const componentName = name.charAt(0).toUpperCase() + name.slice(1);
+  const componentType = options.type ?? "component";
 
-    // Determine the directory
-    let baseDir = path.join(process.cwd(), "src");
-    if (componentType === "page") {
-        baseDir = path.join(baseDir, "app");
-    } else {
-        baseDir = path.join(baseDir, "components");
-    }
+  // Determine the directory
+  let baseDir = path.join(process.cwd(), "src");
+  if (componentType === "page") {
+    baseDir = path.join(baseDir, "app");
+  } else {
+    baseDir = path.join(baseDir, "components");
+  }
 
-    if (options.dir) {
-        baseDir = path.join(baseDir, options.dir);
-    }
+  if (options.dir) {
+    baseDir = path.join(baseDir, options.dir);
+  }
 
-    // Create component directory
-    const componentDir = path.join(baseDir, kebabCase(name));
-    await fs.mkdir(componentDir, { recursive: true });
+  // Create component directory
+  const componentDir = path.join(baseDir, kebabCase(name));
+  await fs.mkdir(componentDir, { recursive: true });
 
-    // Generate component content based on type
-    let componentContent: string;
-    let componentPath: string;
+  // Generate component content based on type
+  let componentContent: string;
+  let componentPath: string;
 
-    switch (componentType) {
-        case "page":
-            componentContent = generatePageComponent(componentName);
-            componentPath = path.join(componentDir, "page.tsx");
-            break;
-        case "form":
-            componentContent = generateFormComponent(componentName);
-            componentPath = path.join(componentDir, `${kebabCase(name)}-form.tsx`);
-            break;
-        default:
-            componentContent = generateDefaultComponent(componentName);
-            componentPath = path.join(componentDir, `${kebabCase(name)}.tsx`);
-    }
+  switch (componentType) {
+    case "page":
+      componentContent = generatePageComponent(componentName);
+      componentPath = path.join(componentDir, "page.tsx");
+      break;
+    case "form":
+      componentContent = generateFormComponent(componentName);
+      componentPath = path.join(componentDir, `${kebabCase(name)}-form.tsx`);
+      break;
+    default:
+      componentContent = generateDefaultComponent(componentName);
+      componentPath = path.join(componentDir, `${kebabCase(name)}.tsx`);
+  }
 
-    // Write component file
-    await fs.writeFile(componentPath, await formatCode(componentContent));
+  // Write component file
+  await fs.writeFile(componentPath, await formatCode(componentContent));
 
-    // Generate test file
-    const testContent = generateComponentTest(componentName, componentType);
-    const testPath = path.join(componentDir, `${kebabCase(name)}.test.tsx`);
-    await fs.writeFile(testPath, await formatCode(testContent));
+  // Generate test file
+  const testContent = generateComponentTest(componentName, componentType);
+  const testPath = path.join(componentDir, `${kebabCase(name)}.test.tsx`);
+  await fs.writeFile(testPath, await formatCode(testContent));
 
-    // Generate stories file (for components only)
-    if (componentType === "component") {
-        const storiesContent = generateComponentStories(componentName);
-        const storiesPath = path.join(componentDir, `${kebabCase(name)}.stories.tsx`);
-        await fs.writeFile(storiesPath, await formatCode(storiesContent));
-    }
+  // Generate stories file (for components only)
+  if (componentType === "component") {
+    const storiesContent = generateComponentStories(componentName);
+    const storiesPath = path.join(componentDir, `${kebabCase(name)}.stories.tsx`);
+    await fs.writeFile(storiesPath, await formatCode(storiesContent));
+  }
 
-    // Create index file for easier imports
-    const indexContent = `export * from "./${kebabCase(name)}";`;
-    const indexPath = path.join(componentDir, "index.ts");
-    await fs.writeFile(indexPath, indexContent);
+  // Create index file for easier imports
+  const indexContent = `export * from "./${kebabCase(name)}";`;
+  const indexPath = path.join(componentDir, "index.ts");
+  await fs.writeFile(indexPath, indexContent);
 }
 
 function generateDefaultComponent(name: string): string {
-    return `import { cn } from "~/lib/utils";
+  return `import { cn } from "~/lib/utils";
 
 export interface ${name}Props {
   className?: string;
@@ -85,8 +87,8 @@ export function ${name}({ className, children, ...props }: ${name}Props) {
 }
 
 function generatePageComponent(name: string): string {
-    return `import { redirect } from "next/navigation";
-import { getServerAuthSession } from "~/server/auth";
+  return `import { redirect } from "next/navigation";
+import { getServerAuthSession } from "~/server/auth-compat";
 import { api } from "~/trpc/server";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
@@ -126,9 +128,9 @@ export default async function ${name}Page() {
 }
 
 function generateFormComponent(name: string): string {
-    const formName = name.replace(/Form$/, "");
+  const formName = name.replace(/Form$/, "");
 
-    return `"use client";
+  return `"use client";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -182,7 +184,7 @@ export function ${name}({ onSuccess, defaultValues }: ${name}Props) {
   //     router.refresh();
   //   },
   //   onError: (error) => {
-  //     toast.error(error.message || "Something went wrong");
+  //     toast.error(error.message ?? "Something went wrong");
   //   },
   // });
 
@@ -241,9 +243,9 @@ export function ${name}({ onSuccess, defaultValues }: ${name}Props) {
 }
 
 function generateComponentTest(name: string, type: string): string {
-    const testName = type === "page" ? `${name}Page` : name;
+  const testName = type === "page" ? `${name}Page` : name;
 
-    return `import { render, screen } from "@testing-library/react";
+  return `import { render, screen } from "@testing-library/react";
 import { ${testName} } from "./${kebabCase(name)}";
 
 describe("${testName}", () => {
@@ -258,7 +260,7 @@ describe("${testName}", () => {
 }
 
 function generateComponentStories(name: string): string {
-    return `import type { Meta, StoryObj } from "@storybook/react";
+  return `import type { Meta, StoryObj } from "@storybook/react";
 import { ${name} } from "./${kebabCase(name)}";
 
 const meta = {
@@ -292,15 +294,15 @@ export const WithCustomClass: Story = {
 
 // Utility functions
 function kebabCase(str: string): string {
-    return str
-        .replace(/([a-z])([A-Z])/g, "$1-$2")
-        .replace(/[\s_]+/g, "-")
-        .toLowerCase();
+  return str
+    .replace(/([a-z])([A-Z])/g, "$1-$2")
+    .replace(/[\s_]+/g, "-")
+    .toLowerCase();
 }
 
 function humanize(str: string): string {
-    return str
-        .replace(/([A-Z])/g, " $1")
-        .replace(/^./, (str) => str.toUpperCase())
-        .trim();
+  return str
+    .replace(/([A-Z])/g, " $1")
+    .replace(/^./, (str) => str.toUpperCase())
+    .trim();
 }

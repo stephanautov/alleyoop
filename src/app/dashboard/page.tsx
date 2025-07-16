@@ -1,3 +1,5 @@
+//src/app/dashboard/page.tsx
+
 import { redirect } from "next/navigation";
 import { getServerAuthSession } from "~/server/auth-compat";
 import { api } from "~/trpc/server";
@@ -83,7 +85,7 @@ export default async function DashboardPage() {
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold">
-                            {stats.byStatus[DocumentStatus.COMPLETED] || 0}
+                            {stats.byStatus[DocumentStatus.COMPLETED] ?? 0}
                         </div>
                         <p className="text-xs text-muted-foreground">
                             Ready for export
@@ -97,8 +99,8 @@ export default async function DashboardPage() {
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold">
-                            {(stats.byStatus[DocumentStatus.PENDING] || 0) +
-                                (stats.byStatus[DocumentStatus.PROCESSING] || 0)}
+                            {(stats.byStatus[DocumentStatus.PENDING] ?? 0) +
+                                (stats.byStatus[DocumentStatus.PROCESSING] ?? 0)}
                         </div>
                         <p className="text-xs text-muted-foreground">
                             In progress

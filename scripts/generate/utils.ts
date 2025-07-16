@@ -1,3 +1,5 @@
+//scripts/generate/utils.ts
+
 import { exec } from "child_process";
 import { promisify } from "util";
 
@@ -74,7 +76,7 @@ export function humanize(str: string): string {
 export function generateImports(imports: Array<{ from: string; items: string[] }>): string {
     return imports
         .map(({ from, items }) => {
-            if (items.length === 1 && items[0].startsWith("* as ")) {
+            if (items.length === 1 && items[0]?.startsWith("* as ")) {
                 return `import ${items[0]} from "${from}";`;
             }
             return `import { ${items.join(", ")} } from "${from}";`;
@@ -177,9 +179,9 @@ export function parseZodSchema(schemaString: string): Array<{ name: string; type
     while ((match = fieldRegex.exec(schemaString)) !== null) {
         const [, name, type, modifiers] = match;
         fields.push({
-            name,
-            type,
-            optional: modifiers.includes(".optional()"),
+            name: name ?? "",
+            type: type ?? "",
+            optional: (modifiers ?? "").includes(".optional()"),
         });
     }
 

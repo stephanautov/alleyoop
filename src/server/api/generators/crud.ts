@@ -1,3 +1,5 @@
+//src/server/api/generators/crud.ts
+
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 import type { Prisma } from "@prisma/client";

@@ -1,3 +1,5 @@
+//src/server/api/routers/user.ts
+
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "~/server/api/trpc";
 import { TRPCError } from "@trpc/server";
@@ -110,11 +112,11 @@ export const userRouter = createTRPCRouter({
                 total: totalExports,
             },
             usage: {
-                documentsThisMonth: usage?.monthlyDocs || 0,
-                tokensThisMonth: usage?.monthlyTokens || 0,
-                totalCost: usage?.totalCost || 0,
+                documentsThisMonth: usage?.monthlyDocs ?? 0,
+                tokensThisMonth: usage?.monthlyTokens ?? 0,
+                totalCost: usage?.totalCost ?? 0,
             },
-            averageWordCount: Math.round(avgWordCount._avg.wordCount || 0),
+            averageWordCount: Math.round(avgWordCount._avg.wordCount ?? 0),
         };
     }),
 

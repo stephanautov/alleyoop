@@ -295,10 +295,10 @@ async function main() {
             where: { userId: stat.userId },
             data: {
                 documentsCount: stat._count,
-                totalTokens: (stat._sum.promptTokens || 0) + (stat._sum.completionTokens || 0),
-                totalCost: stat._sum.totalCost || 0,
+                totalTokens: (stat._sum.promptTokens ?? 0) + (stat._sum.completionTokens ?? 0),
+                totalCost: stat._sum.totalCost ?? 0,
                 monthlyDocs: stat._count,
-                monthlyTokens: (stat._sum.promptTokens || 0) + (stat._sum.completionTokens || 0),
+                monthlyTokens: (stat._sum.promptTokens ?? 0) + (stat._sum.completionTokens ?? 0),
             },
         });
     }

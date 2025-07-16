@@ -1,3 +1,5 @@
+//src/lib/export/markdown-exporter.tsx
+
 import type { DocumentData, Exporter } from "./index";
 
 /**
@@ -428,7 +430,7 @@ export class TxtExporter implements Exporter {
             .join("\n\n");
     }
 
-    private wrapText(text: string, maxLength: number, indent: string = ""): string {
+    private wrapText(text: string, maxLength: number, indent = ""): string {
         const words = text.split(" ");
         const lines: string[] = [];
         let currentLine = indent;

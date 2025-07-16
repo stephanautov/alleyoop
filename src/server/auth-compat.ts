@@ -1,3 +1,5 @@
+//src/server/auth-compat.ts
+
 /**
  * Compatibility wrapper for NextAuth v5
  * Provides functions expected by DocuForge code

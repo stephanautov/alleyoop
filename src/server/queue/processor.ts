@@ -1,4 +1,6 @@
-import { Worker, Job } from "bullmq";
+//src/server/queue/processor.ts
+
+import { Worker, type Job } from "bullmq";
 import { Redis } from "ioredis";
 import { env } from "~/env";
 import { db } from "~/server/db";
@@ -177,8 +179,8 @@ async function generateOutline(type: DocumentType, input: any) {
         max_tokens: 1000,
     });
 
-    const outline = completion.choices[0]?.message?.content || "";
-    const tokens = completion.usage?.total_tokens || 0;
+    const outline = completion.choices[0]?.message?.content ?? "";
+    const tokens = completion.usage?.total_tokens ?? 0;
 
     return {
         content: outline,
@@ -193,7 +195,7 @@ async function generateSections(
     type: DocumentType,
     input: any,
     outline: any,
-    sectionConfigs: any[],
+    sectionConfigs: ReadonlyArray<any>,
     onProgress: (progress: number) => Promise<void>
 ) {
     const sections = [];
@@ -219,9 +221,9 @@ async function generateSections(
             max_tokens: 2000,
         });
 
-        const content = completion.choices[0]?.message?.content || "";
-        const promptTokens = completion.usage?.prompt_tokens || 0;
-        const completionTokens = completion.usage?.completion_tokens || 0;
+        const content = completion.choices[0]?.message?.content ?? "";
+        const promptTokens = completion.usage?.prompt_tokens ?? 0;
+        const completionTokens = completion.usage?.completion_tokens ?? 0;
 
         sections.push({
             id: section.id,

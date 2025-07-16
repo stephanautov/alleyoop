@@ -1,3 +1,5 @@
+//src/server/api/routers/usage.ts
+
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure, adminProcedure } from "~/server/api/trpc";
 import { TRPCError } from "@trpc/server";
@@ -83,8 +85,8 @@ export const usageRouter = createTRPCRouter({
                 }
 
                 acc[month].documents += doc._count;
-                acc[month].tokens += (doc._sum.promptTokens || 0) + (doc._sum.completionTokens || 0);
-                acc[month].cost += doc._sum.totalCost || 0;
+                acc[month].tokens += (doc._sum.promptTokens ?? 0) + (doc._sum.completionTokens ?? 0);
+                acc[month].cost += doc._sum.totalCost ?? 0;
 
                 return acc;
             }, {} as Record<string, { documents: number; tokens: number; cost: number }>);
@@ -95,9 +97,9 @@ export const usageRouter = createTRPCRouter({
                 const month = format(subMonths(now, i), "yyyy-MM");
                 months.unshift({
                     month,
-                    documents: monthlyData[month]?.documents || 0,
-                    tokens: monthlyData[month]?.tokens || 0,
-                    cost: monthlyData[month]?.cost || 0,
+                    documents: monthlyData[month]?.documents ?? 0,
+                    tokens: monthlyData[month]?.tokens ?? 0,
+                    cost: monthlyData[month]?.cost ?? 0,
                 });
             }
 
@@ -121,8 +123,8 @@ export const usageRouter = createTRPCRouter({
         };
 
         const currentUsage = {
-            documents: usage?.monthlyDocs || 0,
-            tokens: usage?.monthlyTokens || 0,
+            documents: usage?.monthlyDocs ?? 0,
+            tokens: usage?.monthlyTokens ?? 0,
         };
 
         const remaining = {
@@ -192,8 +194,8 @@ export const usageRouter = createTRPCRouter({
 
             return {
                 allowed: true,
-                remainingDocuments: limits.monthlyDocuments - (usage?.monthlyDocs || 0),
-                remainingTokens: limits.monthlyTokens - (usage?.monthlyTokens || 0),
+                remainingDocuments: limits.monthlyDocuments - (usage?.monthlyDocs ?? 0),
+                remainingTokens: limits.monthlyTokens - (usage?.monthlyTokens ?? 0),
             };
         }),
 
@@ -268,13 +270,13 @@ export const usageRouter = createTRPCRouter({
         return {
             totalUsers,
             activeUsers,
-            totalDocuments: totalDocuments._sum.documentsCount || 0,
-            totalTokens: totalTokens._sum.totalTokens || 0,
-            totalRevenue: totalRevenue._sum.totalCost || 0,
+            totalDocuments: totalDocuments._sum.documentsCount ?? 0,
+            totalTokens: totalTokens._sum.totalTokens ?? 0,
+            totalRevenue: totalRevenue._sum.totalCost ?? 0,
             averagePerUser: {
-                documents: Math.round(averageUsagePerUser._avg.documentsCount || 0),
-                tokens: Math.round(averageUsagePerUser._avg.totalTokens || 0),
-                cost: averageUsagePerUser._avg.totalCost || 0,
+                documents: Math.round(averageUsagePerUser._avg.documentsCount ?? 0),
+                tokens: Math.round(averageUsagePerUser._avg.totalTokens ?? 0),
+                cost: averageUsagePerUser._avg.totalCost ?? 0,
             },
         };
     }),

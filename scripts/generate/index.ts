@@ -1,5 +1,6 @@
 #!/usr/bin/env tsx
 /**
+ * scripts/generate/index.ts
  * Code Generation Scripts for DocuForge
  * Rapidly generate boilerplate code for common patterns
  */
@@ -26,7 +27,7 @@ program
     .description("Generate a new tRPC router with CRUD operations")
     .option("-m, --model <model>", "Prisma model name")
     .option("-c, --crud", "Include CRUD operations", true)
-    .action(async (name, options) => {
+    .action(async (name: string, options: { model?: string; crud?: boolean }) => {
         console.log(chalk.blue(`🔧 Generating router: ${name}`));
         await generateRouter(name, options);
         console.log(chalk.green(`✅ Router ${name} generated successfully!`));
@@ -38,7 +39,7 @@ program
     .description("Generate a new React component")
     .option("-t, --type <type>", "Component type (page, component, form)", "component")
     .option("-d, --dir <dir>", "Directory to create component in")
-    .action(async (name, options) => {
+    .action(async (name: string, options) => {
         console.log(chalk.blue(`🎨 Generating component: ${name}`));
         await generateComponent(name, options);
         console.log(chalk.green(`✅ Component ${name} generated successfully!`));
@@ -48,7 +49,7 @@ program
 program
     .command("document-type <name>")
     .description("Generate a complete document type with all infrastructure")
-    .action(async (name) => {
+    .action(async (name: string) => {
         console.log(chalk.blue(`📄 Generating document type: ${name}`));
         const answers = await inquirer.prompt([
             {
@@ -88,7 +89,7 @@ program
     .command("test <path>")
     .description("Generate tests for a component or function")
     .option("-t, --type <type>", "Test type (unit, integration, e2e)", "unit")
-    .action(async (path, options) => {
+    .action(async (path: string, options) => {
         console.log(chalk.blue(`🧪 Generating tests for: ${path}`));
         await generateTest(path, options);
         console.log(chalk.green(`✅ Tests generated successfully!`));
@@ -98,7 +99,7 @@ program
 program
     .command("feature <name>")
     .description("Generate a complete feature with API, UI, and tests")
-    .action(async (name) => {
+    .action(async (name: string) => {
         console.log(chalk.blue(`🚀 Generating complete feature: ${name}`));
 
         const answers = await inquirer.prompt([

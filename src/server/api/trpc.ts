@@ -1,3 +1,5 @@
+//src/server/api/trpc.ts
+
 /**
  * YOU PROBABLY DON'T NEED TO EDIT THIS FILE, UNLESS:
  * 1. You want to modify request context (see Part 1).
@@ -104,6 +106,9 @@ const t = initTRPC.context<typeof createTRPCContext>().create({
  */
 export const createTRPCRouter = t.router;
 
+// Helper to merge routers into a single flat namespace
+export const mergeRouters = t.mergeRouters;
+
 /**
  * Public (unauthenticated) procedure
  *
@@ -186,20 +191,17 @@ export const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
  *
  * This procedure caches the result for a specified duration
  */
-export const createCachedProcedure = (ttl: number = 300) => {
-  return publicProcedure.use(async ({ ctx, next, path, rawInput }) => {
-    const cacheKey = `cache:${path}:${JSON.stringify(rawInput)}`;
+export const createCachedProcedure = (ttl = 300) => {
+  return publicProcedure.use(async ({ ctx, next, path, input }) => {
+    const cacheKey = `cache:${path}:${JSON.stringify(input)}`;
 
-    // Try to get from cache
     const cached = await ctx.redis.get(cacheKey);
     if (cached) {
-      return { result: JSON.parse(cached) };
+      return { ok: true, data: JSON.parse(cached) } as any;
     }
 
-    // If not cached, proceed
     const result = await next();
 
-    // Cache the result
     if (result.ok) {
       await ctx.redis.setex(cacheKey, ttl, JSON.stringify(result.data));
     }
@@ -214,7 +216,7 @@ export const createCachedProcedure = (ttl: number = 300) => {
  * This procedure logs all requests for auditing
  */
 export const loggedProcedure = protectedProcedure.use(
-  async ({ ctx, next, path, rawInput }) => {
+  async ({ ctx, next, path, input }) => {
     const startTime = Date.now();
 
     try {

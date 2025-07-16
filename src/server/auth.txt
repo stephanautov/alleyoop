@@ -54,8 +54,8 @@ export const authOptions: NextAuthOptions = {
     adapter: PrismaAdapter(db),
     providers: [
         GoogleProvider({
-            clientId: env.GOOGLE_CLIENT_ID || "",
-            clientSecret: env.GOOGLE_CLIENT_SECRET || "",
+            clientId: env.GOOGLE_CLIENT_ID ?? "",
+            clientSecret: env.GOOGLE_CLIENT_SECRET ?? "",
             authorization: {
                 params: {
                     prompt: "consent",
@@ -73,7 +73,7 @@ export const authOptions: NextAuthOptions = {
                     pass: process.env.EMAIL_SERVER_PASSWORD,
                 },
             },
-            from: env.FROM_EMAIL || "noreply@docuforge.app",
+            from: env.FROM_EMAIL ?? "noreply@docuforge.app",
             // You can customize the email sent
             // sendVerificationRequest({ identifier, url, provider }) {
             //   // Send custom email

@@ -1,3 +1,5 @@
+//src/components/forms/form-generator.tsx
+
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -36,19 +38,21 @@ export interface FormGeneratorProps<T extends z.ZodType<any, any>> {
     className?: string;
 }
 
-export interface FieldConfig<T> {
-    [K in keyof T]?: {
-    label ?: string;
-    placeholder ?: string;
-    description ?: string;
-    type ?: string;
-    hidden ?: boolean;
-    disabled ?: boolean;
-    options ?: { label: string; value: string }[];
-    rows ?: number; // for textarea
-    multiple ?: boolean; // for array fields
+// Options applicable to a single form field
+export type FieldOptions = {
+    label?: string;
+    placeholder?: string;
+    description?: string;
+    type?: string;
+    hidden?: boolean;
+    disabled?: boolean;
+    options?: { label: string; value: string }[];
+    rows?: number; // for textarea
+    multiple?: boolean; // for array fields
 };
-}
+
+// Configuration object mapping each schema key to its options
+export type FieldConfig<T> = Partial<Record<keyof T, FieldOptions>>;
 
 // Type guards for Zod types
 function isZodString(schema: z.ZodTypeAny): schema is z.ZodString {
@@ -105,7 +109,7 @@ function renderField<T extends Record<string, any>>(
     fieldName: keyof T,
     fieldSchema: z.ZodTypeAny,
     form: any,
-    config?: FieldConfig<T>[keyof T]
+    config?: FieldOptions
 ) {
     const unwrappedSchema = unwrapOptional(fieldSchema);
     const isOptional = isZodOptional(fieldSchema);
@@ -143,7 +147,7 @@ function renderField<T extends Record<string, any>>(
                             ) : (
                                 <Input
                                     {...field}
-                                    type={config?.type || "text"}
+                                    type={config?.type ?? "text"}
                                     placeholder={config?.placeholder}
                                     disabled={config?.disabled}
                                 />
@@ -243,15 +247,18 @@ function renderField<T extends Record<string, any>>(
                         >
                             <FormControl>
                                 <SelectTrigger>
-                                    <SelectValue placeholder={config?.placeholder || "Select an option"} />
+                                    <SelectValue placeholder={config?.placeholder ?? "Select an option"} />
                                 </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                                {options.map((option) => (
-                                    <SelectItem key={option.value} value={option.value}>
-                                        {option.label}
-                                    </SelectItem>
-                                ))}
+                                {options.map((option: { label: string; value: string }) => {
+                                    const opt = option;
+                                    return (
+                                        <SelectItem key={opt.value} value={opt.value}>
+                                            {opt.label}
+                                        </SelectItem>
+                                    );
+                                })}
                             </SelectContent>
                         </Select>
                         <FormMessage />
@@ -295,7 +302,7 @@ function renderField<T extends Record<string, any>>(
                                         {field.value ? (
                                             format(field.value, "PPP")
                                         ) : (
-                                            <span>{config?.placeholder || "Pick a date"}</span>
+                                            <span>{config?.placeholder ?? "Pick a date"}</span>
                                         )}
                                         <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                                     </Button>
@@ -402,7 +409,7 @@ function ArrayField<T>({
                     <Input
                         value={inputValue}
                         onChange={(e) => setInputValue(e.target.value)}
-                        placeholder={config?.placeholder || "Add item"}
+                        placeholder={config?.placeholder ?? "Add item"}
                         onKeyPress={(e) => {
                             if (e.key === "Enter") {
                                 e.preventDefault();
@@ -472,7 +479,7 @@ export function FormGenerator<T extends z.ZodType<any, any>>({
                             fieldName as keyof z.infer<T>,
                             fieldSchema as z.ZodTypeAny,
                             form,
-                            fieldConfig[fieldName as keyof z.infer<T>]
+                            (fieldConfig as Record<string, FieldOptions | undefined>)[fieldName] // cast for generic safety
                         )}
                     </div>
                 ))}
@@ -512,8 +519,16 @@ export function useGeneratedForm<T extends z.ZodType<any, any>>(
             <FormGenerator
                 schema={schema}
                 {...props}
-                fieldConfig={{ ...config?.fieldConfig, ...props.fieldConfig }}
-                defaultValues={{ ...config?.defaultValues, ...props.defaultValues }}
+                fieldConfig={
+                    {
+                        ...(config?.fieldConfig ?? {}),
+                        ...(props.fieldConfig ?? {}),
+                    } as unknown as FieldConfig<z.infer<T>>
+                }
+                defaultValues={{
+                    ...(config?.defaultValues ?? {}),
+                    ...(props.defaultValues ?? {}),
+                } as Partial<z.infer<T>>}
             />
         ),
     };

@@ -1,3 +1,5 @@
+//src/lib/utils.ts
+
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { format, formatDistance, formatRelative, isValid } from "date-fns";
@@ -30,8 +32,8 @@ export function formatBytes(bytes: number, decimals = 2): string {
  */
 export function formatCurrency(
   amount: number,
-  currency: string = "USD",
-  locale: string = "en-US"
+  currency = "USD",
+  locale = "en-US"
 ): string {
   return new Intl.NumberFormat(locale, {
     style: "currency",
@@ -44,7 +46,7 @@ export function formatCurrency(
  */
 export function formatDate(
   date: Date | string | number,
-  formatStr: string = "PPP"
+  formatStr = "PPP"
 ): string {
   const dateObj = typeof date === "string" || typeof date === "number"
     ? new Date(date)

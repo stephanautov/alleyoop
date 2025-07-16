@@ -1,3 +1,5 @@
+//src/server/api/routers/health.ts
+
 import { z } from "zod";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import { TRPCError } from "@trpc/server";
@@ -9,7 +11,7 @@ export const healthRouter = createTRPCRouter({
         return {
             status: "ok",
             timestamp: new Date().toISOString(),
-            version: process.env.npm_package_version || "unknown",
+            version: process.env.npm_package_version ?? "unknown",
         };
     }),
 

@@ -1,3 +1,5 @@
+//src/app/page.tsx
+
 import Link from "next/link";
 import { getServerAuthSession } from "~/server/auth-compat";
 import { Button } from "~/components/ui/button";

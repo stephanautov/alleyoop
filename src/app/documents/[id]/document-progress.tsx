@@ -1,3 +1,5 @@
+//src/app/documents/[id]/document-progress.tsx
+
 "use client";
 
 import { useEffect } from "react";
@@ -47,11 +49,11 @@ export function DocumentProgress({ documentId }: DocumentProgressProps) {
     );
 
     const currentStage = progressStages.find(
-        (stage) => (progress?.progress || 0) <= stage.value
+        (stage) => (progress?.progress ?? 0) <= stage.value
     ) || progressStages[0];
 
-    const progressValue = progress?.progress || 0;
-    const status = progress?.status || "pending";
+    const progressValue = progress?.progress ?? 0;
+    const status = progress?.status ?? "pending";
 
     return (
         <Card>
@@ -80,7 +82,7 @@ export function DocumentProgress({ documentId }: DocumentProgressProps) {
                     <Alert variant="destructive">
                         <AlertCircle className="h-4 w-4" />
                         <AlertDescription>
-                            {progress?.failedReason || "Document generation failed. Please try again."}
+                            {progress?.failedReason ?? "Document generation failed. Please try again."}
                         </AlertDescription>
                     </Alert>
                 ) : (

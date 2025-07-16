@@ -1,3 +1,5 @@
+//src/config/documents.ts
+
 import { z } from "zod";
 import { DocumentType } from "@prisma/client";
 import { env } from "~/env";

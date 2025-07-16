@@ -1,5 +1,7 @@
+//src/server/api/routers/export.ts
+
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import { createTRPCRouter, mergeRouters, protectedProcedure } from "~/server/api/trpc";
 import { createCRUDRouter } from "~/server/api/generators/crud";
 import { TRPCError } from "@trpc/server";
 import { ExportFormat, ExportStatus } from "@prisma/client";
@@ -87,10 +89,7 @@ const baseCrudRouter = createCRUDRouter({
 });
 
 // Extend with export-specific procedures
-export const exportRouter = createTRPCRouter({
-    // Include base CRUD operations
-    ...baseCrudRouter,
-
+const extraExportRouter = createTRPCRouter({
     // Create export with immediate processing (no queue)
     createImmediate: protectedProcedure
         .input(createExportSchema)
@@ -294,3 +293,5 @@ export const exportRouter = createTRPCRouter({
         };
     }),
 });
+
+export const exportRouter = mergeRouters(baseCrudRouter, extraExportRouter);

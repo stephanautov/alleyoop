@@ -1,3 +1,5 @@
+//src/app/documents/[id]/page.tsx
+
 import { notFound, redirect } from "next/navigation";
 import { getServerAuthSession } from "~/server/auth-compat";
 import { api } from "~/trpc/server";
@@ -212,20 +214,20 @@ export default async function DocumentDetailPage({ params }: PageProps) {
                                 <div className="flex justify-between text-sm">
                                     <span className="text-muted-foreground">Word Count</span>
                                     <span className="font-medium">
-                                        {document.wordCount?.toLocaleString() || "0"}
+                                        {document.wordCount?.toLocaleString() ?? "0"}
                                     </span>
                                 </div>
                                 <div className="flex justify-between text-sm">
                                     <span className="text-muted-foreground">Tokens Used</span>
                                     <span className="font-medium">
-                                        {((document.promptTokens || 0) + (document.completionTokens || 0)).toLocaleString()}
+                                        {((document.promptTokens ?? 0) + (document.completionTokens ?? 0)).toLocaleString()}
                                     </span>
                                 </div>
                                 <div className="flex justify-between text-sm">
                                     <span className="text-muted-foreground">Cost</span>
                                     <span className="font-medium flex items-center gap-1">
                                         <DollarSign className="h-3 w-3" />
-                                        {document.totalCost?.toFixed(2) || "0.00"}
+                                        {document.totalCost?.toFixed(2) ?? "0.00"}
                                     </span>
                                 </div>
                             </CardContent>

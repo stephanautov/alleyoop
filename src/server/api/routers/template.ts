@@ -1,8 +1,10 @@
+//src/server/api/routers/template.ts
+
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure, publicProcedure } from "~/server/api/trpc";
+import { createTRPCRouter, protectedProcedure, publicProcedure, mergeRouters } from "~/server/api/trpc";
 import { createCRUDRouter } from "~/server/api/generators/crud";
 import { TRPCError } from "@trpc/server";
-import { DocumentType } from "@prisma/client";
+import { DocumentType, Prisma } from "@prisma/client";
 import { getDocumentSchema, getDocumentConfig } from "~/config/documents";
 
 // Template creation schema
@@ -54,10 +56,7 @@ const baseCrudRouter = createCRUDRouter({
 });
 
 // Extend with template-specific procedures
-export const templateRouter = createTRPCRouter({
-    // Include base CRUD operations
-    ...baseCrudRouter,
-
+const extraTemplateRouter = createTRPCRouter({
     // Get templates by document type
     getByType: publicProcedure
         .input(
@@ -143,7 +142,7 @@ export const templateRouter = createTRPCRouter({
                     name: input.name || `Copy of ${original.name}`,
                     description: original.description,
                     type: original.type,
-                    config: original.config,
+                    config: original.config as Prisma.InputJsonValue,
                     isPublic: false, // Clones are always private initially
                     createdBy: ctx.session.user.id,
                 },
@@ -184,10 +183,10 @@ export const templateRouter = createTRPCRouter({
 
             // Merge template config with overrides
             const documentInput = {
-                ...template.config,
-                ...input.overrides,
+                ...(template.config as Record<string, unknown>),
+                ...(input.overrides ?? {}),
                 title: input.title,
-            };
+            } as Record<string, unknown>;
 
             // Validate final input
             const schema = getDocumentSchema(template.type);
@@ -208,7 +207,7 @@ export const templateRouter = createTRPCRouter({
                     title: input.title,
                     type: template.type,
                     status: "PENDING",
-                    input: documentInput,
+                    input: documentInput as Prisma.InputJsonValue,
                 },
             });
 
@@ -224,7 +223,7 @@ export const templateRouter = createTRPCRouter({
                     documentId: document.id,
                     userId: ctx.session.user.id,
                     type: document.type,
-                    input: documentInput,
+                    input: documentInput as Prisma.InputJsonValue,
                 },
                 {
                     jobId: document.id,
@@ -298,3 +297,5 @@ export const templateRouter = createTRPCRouter({
             return templates;
         }),
 });
+
+export const templateRouter = mergeRouters(baseCrudRouter, extraTemplateRouter);

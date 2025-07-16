@@ -1,3 +1,5 @@
+//src/lib/ai/index.ts
+
 import { OpenAI } from "openai";
 import Anthropic from "@anthropic-ai/sdk";
 import { env } from "~/env";
@@ -116,16 +118,16 @@ export class AIService {
         });
 
         const message = completion.choices[0]?.message;
-        if (!message || !message.content) {
+        if (!message?.content) {
             throw new Error("No response from OpenAI");
         }
 
         return {
             content: message.content,
             model: this.model,
-            promptTokens: completion.usage?.prompt_tokens || 0,
-            completionTokens: completion.usage?.completion_tokens || 0,
-            totalTokens: completion.usage?.total_tokens || 0,
+            promptTokens: completion.usage?.prompt_tokens ?? 0,
+            completionTokens: completion.usage?.completion_tokens ?? 0,
+            totalTokens: completion.usage?.total_tokens ?? 0,
         };
     }
 
@@ -257,7 +259,7 @@ Return your response as a JSON object with the following structure:
             [DocumentType.GRANT_PROPOSAL]: "\n\nFor grant proposals, ensure the outline demonstrates clear need, feasibility, and impact, following standard grant writing best practices.",
         };
 
-        return basePrompt + (typeSpecificPrompts[documentType] || "");
+        return basePrompt + (typeSpecificPrompts[documentType] ?? "");
     }
 
     private getSectionSystemPrompt(documentType: DocumentType): string {
@@ -289,8 +291,8 @@ ${JSON.stringify(input, null, 2)}
 Required Sections:
 ${sections}
 
-Output Length: ${input.outputLength || "medium"}
-Purpose: ${input.purpose || "general"}
+Output Length: ${input.outputLength ?? "medium"}
+Purpose: ${input.purpose ?? "general"}
 
 Please create an outline that:
 1. Covers all required sections comprehensively
@@ -381,7 +383,7 @@ ${content}`;
     async generateTitleSuggestions(
         documentType: DocumentType,
         input: any,
-        count: number = 5
+        count = 5
     ): Promise<string[]> {
         const config = getDocumentConfig(documentType);
         const systemPrompt = `You are an expert at creating compelling titles for ${config.name} documents.`;
@@ -406,7 +408,7 @@ Return a JSON array of title strings. Make them specific, professional, and enga
      */
     async summarizeDocument(
         sections: Array<{ content: string }>,
-        maxLength: number = 500
+        maxLength = 500
     ): Promise<string> {
         const fullContent = sections.map((s) => s.content).join("\n\n");
 

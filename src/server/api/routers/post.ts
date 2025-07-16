@@ -1,3 +1,5 @@
+//src/server/api/routers/post.ts
+
 import { z } from "zod";
 
 import {
@@ -16,23 +18,25 @@ export const postRouter = createTRPCRouter({
     }),
 
   create: protectedProcedure
-    .input(z.object({ name: z.string().min(1) }))
+    .input(z.object({ title: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      return ctx.db.post.create({
+      return ctx.db.document.create({
         data: {
-          name: input.name,
-          createdBy: { connect: { id: ctx.session.user.id } },
+          userId: ctx.session.user.id,
+          type: "BIOGRAPHY", // default type
+          title: input.title,
+          input: {},
         },
       });
     }),
 
   getLatest: protectedProcedure.query(async ({ ctx }) => {
-    const post = await ctx.db.post.findFirst({
+    const doc = await ctx.db.document.findFirst({
       orderBy: { createdAt: "desc" },
-      where: { createdBy: { id: ctx.session.user.id } },
+      where: { userId: ctx.session.user.id },
     });
 
-    return post ?? null;
+    return doc ?? null;
   }),
 
   getSecretMessage: protectedProcedure.query(() => {

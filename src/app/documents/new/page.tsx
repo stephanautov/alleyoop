@@ -1,3 +1,5 @@
+//src/app/documents/new/page.tsx
+
 "use client";
 
 import { useState } from "react";
@@ -51,7 +53,7 @@ export default function NewDocumentPage() {
             router.push(`/documents/${document.id}`);
         },
         onError: (error) => {
-            toast.error(error.message || "Failed to create document");
+            toast.error(error.message ?? "Failed to create document");
         },
     });
 
