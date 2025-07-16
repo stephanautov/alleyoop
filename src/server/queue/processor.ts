@@ -9,8 +9,10 @@ import { getDocumentConfig } from "~/config/documents";
 import { OpenAI } from "openai";
 import { z } from "zod";
 
-// Initialize Redis connection
-const redis = new Redis(env.REDIS_URL);
+// Initialize Redis connection (BullMQ requires maxRetriesPerRequest to be null)
+const redis = new Redis(env.REDIS_URL, {
+    maxRetriesPerRequest: null,
+});
 
 // Initialize OpenAI
 const openai = new OpenAI({

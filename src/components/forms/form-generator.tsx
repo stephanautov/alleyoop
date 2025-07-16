@@ -95,6 +95,73 @@ function unwrapOptional(schema: z.ZodTypeAny): z.ZodTypeAny {
     return schema;
 }
 
+function MultiSelectField<T>({
+    fieldName,
+    form,
+    config,
+    options,
+}: {
+    fieldName: string;
+    form: any;
+    config?: any;
+    options: { label: string; value: string }[];
+}) {
+    const fieldValue = form.watch(fieldName) ?? [];
+
+    const handleToggle = (value: string) => {
+        const currentValues = fieldValue || [];
+        const newValues = currentValues.includes(value)
+            ? currentValues.filter((v: string) => v !== value)
+            : [...currentValues, value];
+        form.setValue(fieldName, newValues);
+    };
+
+    const toggleAll = () => {
+        const allValues = options.map(opt => opt.value);
+        const hasAll = allValues.every(val => fieldValue.includes(val));
+        form.setValue(fieldName, hasAll ? [] : allValues);
+    };
+
+    return (
+        <FormItem>
+            <div className="flex items-center justify-between mb-2">
+                <FormLabel>
+                    {config?.label || humanizeFieldName(fieldName)}
+                </FormLabel>
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={toggleAll}
+                    className="h-auto p-1 text-xs"
+                >
+                    {fieldValue.length === options.length ? "Deselect All" : "Select All"}
+                </Button>
+            </div>
+            {config?.description && (
+                <FormDescription>{config.description}</FormDescription>
+            )}
+            <div className="grid grid-cols-1 gap-2 p-3 border rounded-lg bg-muted/10">
+                {options.map((option) => (
+                    <label
+                        key={option.value}
+                        className="flex items-center space-x-2 cursor-pointer hover:bg-muted/50 p-2 rounded transition-colors"
+                    >
+                        <input
+                            type="checkbox"
+                            checked={fieldValue.includes(option.value)}
+                            onChange={() => handleToggle(option.value)}
+                            className="rounded border-gray-300"
+                        />
+                        <span className="text-sm">{option.label}</span>
+                    </label>
+                ))}
+            </div>
+            <FormMessage />
+        </FormItem>
+    );
+}
+
 // Convert field name to human-readable label
 function humanizeFieldName(fieldName: string): string {
     return fieldName
@@ -273,7 +340,28 @@ function renderField<T extends Record<string, any>>(
 
     // Array fields
     if (isZodArray(unwrappedSchema)) {
-        return <ArrayField fieldName={fieldName as string} form={form} config={config} />;
+        // Check if it's an array of enums (predefined options)
+        const elementSchema = unwrappedSchema._def.type;
+
+        if (isZodEnum(elementSchema)) {
+            // Array of enum values - use multi-select
+            const options = config?.options || elementSchema._def.values.map((value: string) => ({
+                label: humanizeFieldName(value),
+                value,
+            }));
+
+            return (
+                <MultiSelectField
+                    fieldName={fieldName as string}
+                    form={form}
+                    config={config}
+                    options={options}
+                />
+            );
+        } else {
+            // Regular array field for free-form input
+            return <ArrayField fieldName={fieldName as string} form={form} config={config} />;
+        }
     }
 
     // Date fields
