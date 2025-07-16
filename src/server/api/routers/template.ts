@@ -260,7 +260,7 @@ const extraTemplateRouter = createTRPCRouter({
         }),
 
     // Search templates
-    search: publicProcedure
+    searchTemplates: publicProcedure
         .input(
             z.object({
                 query: z.string().min(1),

@@ -6,10 +6,10 @@
   "scripts": {
     "build": "next build",
     "check": "next lint && tsc --noEmit",
-    "db:generate": "prisma migrate dev",
-    "db:migrate": "prisma migrate deploy",
-    "db:push": "prisma db push",
-    "db:studio": "prisma studio",
+    "db:generate": "dotenv -e .env.local -e .env -- prisma migrate dev",
+    "db:migrate": "dotenv -e .env.local -e .env -- prisma migrate deploy",
+    "db:push": "dotenv -e .env.local -e .env -- prisma db push",
+    "db:studio": "dotenv -e .env.local -e .env -- prisma studio",
     "dev": "next dev --turbo",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,mdx}\" --cache",
     "format:write": "prettier --write \"**/*.{ts,tsx,js,jsx,mdx}\" --cache",
@@ -22,7 +22,7 @@
     "dev:db": "docker-compose up -d",
     "setup": "docker-compose up -d && npm run db:push",
     "db:seed": "tsx scripts/seed.ts",
-    "dev:queue": "tsx watch src/server/queue/processor.ts",
+    "dev:queue": "dotenv -e .env.local -e .env -- tsx watch src/server/queue/processor.ts",
     "dev:all": "npm-run-all --parallel dev:db dev dev:queue",
     "generate": "tsx scripts/generate/index.ts"
   },

@@ -152,7 +152,7 @@ export const DOCUMENT_CONFIGS = {
         name: "Biography",
         description: "Create professional or personal biographies",
         icon: "User",
-        enabled: env.ENABLE_BIOGRAPHY,
+        enabled: env.NEXT_PUBLIC_ENABLE_BIOGRAPHY,
         sections: [
             { id: "introduction", name: "Introduction", order: 1 },
             { id: "early_life", name: "Early Life", order: 2 },
@@ -175,7 +175,7 @@ export const DOCUMENT_CONFIGS = {
         name: "Case Summary",
         description: "Generate legal case summaries and briefs",
         icon: "Scale",
-        enabled: env.ENABLE_CASE_SUMMARY,
+        enabled: env.NEXT_PUBLIC_ENABLE_CASE_SUMMARY,
         sections: [
             { id: "header", name: "Case Header", order: 1 },
             { id: "parties", name: "Parties", order: 2 },
@@ -197,7 +197,7 @@ export const DOCUMENT_CONFIGS = {
         name: "Business Plan",
         description: "Create comprehensive business plans",
         icon: "Briefcase",
-        enabled: env.ENABLE_BUSINESS_PLAN,
+        enabled: env.NEXT_PUBLIC_ENABLE_BUSINESS_PLAN,
         sections: [
             { id: "executive_summary", name: "Executive Summary", order: 1 },
             { id: "company_description", name: "Company Description", order: 2 },
@@ -221,7 +221,7 @@ export const DOCUMENT_CONFIGS = {
         name: "Medical Report",
         description: "Generate medical reports and summaries",
         icon: "FileHeart",
-        enabled: env.ENABLE_MEDICAL_REPORT,
+        enabled: env.NEXT_PUBLIC_ENABLE_MEDICAL_REPORT,
         sections: [
             { id: "header", name: "Report Header", order: 1 },
             { id: "patient_info", name: "Patient Information", order: 2 },
@@ -244,7 +244,7 @@ export const DOCUMENT_CONFIGS = {
         name: "Grant Proposal",
         description: "Write compelling grant proposals",
         icon: "FileText",
-        enabled: env.ENABLE_GRANT_PROPOSAL,
+        enabled: env.NEXT_PUBLIC_ENABLE_GRANT_PROPOSAL,
         sections: [
             { id: "executive_summary", name: "Executive Summary", order: 1 },
             { id: "statement_of_need", name: "Statement of Need", order: 2 },
