@@ -1,0 +1,184 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// NextAuth.js Models
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model User {
+  id            String     @id @default(cuid())
+  name          String?
+  email         String?    @unique
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  
+  // Relations
+  accounts      Account[]
+  sessions      Session[]
+  documents     Document[]
+  usage         Usage?
+  exports       Export[]
+  
+  @@index([email])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// Document Models
+model Document {
+  id            String         @id @default(cuid())
+  userId        String
+  title         String
+  type          DocumentType
+  status        DocumentStatus @default(PENDING)
+  input         Json           // Stores the user input/configuration
+  outline       Json?          // Stores the generated outline
+  sections      Json?          // Stores the generated sections
+  wordCount     Int            @default(0)
+  
+  // Metadata
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  completedAt   DateTime?
+  
+  // Relations
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exports       Export[]
+  jobId         String?        // BullMQ job ID for tracking
+  
+  // Costs
+  promptTokens  Int            @default(0)
+  completionTokens Int         @default(0)
+  totalCost     Float          @default(0)
+  
+  @@index([userId, status])
+  @@index([type])
+  @@index([createdAt])
+}
+
+model Export {
+  id          String       @id @default(cuid())
+  documentId  String
+  userId      String
+  format      ExportFormat
+  url         String?      // URL to download the export
+  status      ExportStatus @default(PROCESSING)
+  createdAt   DateTime     @default(now())
+  expiresAt   DateTime?    // When the export URL expires
+  
+  // Relations
+  document    Document     @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([documentId])
+  @@index([userId])
+  @@index([status])
+}
+
+model Usage {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  documentsCount  Int      @default(0)
+  totalTokens     Int      @default(0)
+  totalCost       Float    @default(0)
+  
+  // Monthly limits (reset monthly)
+  monthlyDocs     Int      @default(0)
+  monthlyTokens   Int      @default(0)
+  monthlyResetAt  DateTime @default(now())
+  
+  // Relations
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+}
+
+// Template Models (for future use)
+model Template {
+  id          String       @id @default(cuid())
+  name        String
+  description String?
+  type        DocumentType
+  config      Json         // Default configuration for this template
+  isPublic    Boolean      @default(false)
+  createdBy   String?      // User ID who created it (null for system templates)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  
+  @@index([type, isPublic])
+}
+
+// Enums
+enum DocumentType {
+  BIOGRAPHY
+  CASE_SUMMARY
+  BUSINESS_PLAN
+  MEDICAL_REPORT
+  GRANT_PROPOSAL
+}
+
+enum DocumentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum ExportFormat {
+  PDF
+  DOCX
+  MARKDOWN
+  HTML
+  TXT
+}
+
+enum ExportStatus {
+  PROCESSING
+  COMPLETED
+  FAILED
+  EXPIRED
+}
