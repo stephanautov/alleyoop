@@ -8,6 +8,7 @@ import { templateRouter } from "./routers/template";
 import { usageRouter } from "./routers/usage";
 import { healthRouter } from "./routers/health";
 import { postRouter } from "./routers/post";
+import { generatorsRouter } from "./routers/generators";
 
 /**
  * This is the primary router for your server.
@@ -22,6 +23,7 @@ export const appRouter = createTRPCRouter({
   usage: usageRouter,
   health: healthRouter,
   post: postRouter,
+  generators: generatorsRouter,
 });
 
 // export type definition of API

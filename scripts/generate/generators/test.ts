@@ -4,24 +4,35 @@ import { formatCode, pascalCase, camelCase } from "../utils";
 
 interface TestOptions {
   type?: "unit" | "integration" | "e2e";
+  dryRun?: boolean;
+}
+
+interface FileToGenerate {
+  path: string;
+  content: string;
 }
 
 export async function generateTest(targetPath: string, options: TestOptions = {}) {
   const testType = options.type || detectTestType(targetPath);
-  const absolutePath = path.isAbsolute(targetPath) 
-    ? targetPath 
+  const absolutePath = path.isAbsolute(targetPath)
+    ? targetPath
     : path.join(process.cwd(), targetPath);
-  
-  // Check if target file exists
+
+  // Check if target file exists (always check to provide info, but don't throw in dry-run)
   const fileExists = await fs.access(absolutePath).then(() => true).catch(() => false);
-  if (!fileExists) {
+  if (!fileExists && !options.dryRun) {
     console.warn(`⚠️  Target file not found: ${targetPath}`);
     console.log("Generating test template anyway...");
   }
 
+  // Read file content if it exists
   const fileContent = fileExists ? await fs.readFile(absolutePath, "utf-8") : "";
   const fileInfo = parseFileInfo(targetPath, fileContent);
-  
+
+  // Collect files to generate
+  const filesToGenerate: FileToGenerate[] = [];
+
+  // Generate test content and path based on type
   let testContent: string;
   let testPath: string;
 
@@ -43,14 +54,54 @@ export async function generateTest(targetPath: string, options: TestOptions = {}
       testPath = getUnitTestPath(absolutePath);
   }
 
-  // Ensure test directory exists
-  await fs.mkdir(path.dirname(testPath), { recursive: true });
-  
-  // Write test file
-  await fs.writeFile(testPath, await formatCode(testContent));
-  
-  console.log(`✅ Generated ${testType} test: ${path.relative(process.cwd(), testPath)}`);
+  // Format and add to files list
+  testContent = await formatCode(testContent);
+  filesToGenerate.push({ path: testPath, content: testContent });
+
+  // Handle dry-run mode
+  if (options.dryRun) {
+    console.log(`🧪 Would generate ${testType} test for: ${targetPath}`);
+
+    if (!fileExists) {
+      console.log(`⚠️  Note: Target file does not exist: ${targetPath}`);
+    }
+
+    for (const file of filesToGenerate) {
+      console.log(`Would create: ${file.path}`);
+      console.log(`Test type: ${testType}`);
+      console.log(`File size: ${file.content.length} bytes`);
+
+      // Emit preview data
+      process.stdout.write(JSON.stringify({
+        type: "preview-file",
+        path: file.path,
+        content: file.content
+      }) + "\n");
+    }
+
+    return;
+  }
+
+  // Actually create test files
+  for (const file of filesToGenerate) {
+    // Ensure test directory exists
+    const dir = path.dirname(file.path);
+    await fs.mkdir(dir, { recursive: true });
+
+    // Check if test already exists
+    const testExists = await fs.access(file.path).then(() => true).catch(() => false);
+    if (testExists) {
+      console.warn(`⚠️  Test already exists: ${file.path}`);
+      console.log("Overwriting existing test file...");
+    }
+
+    // Write test file
+    await fs.writeFile(file.path, file.content);
+    console.log(`✅ Generated ${testType} test: ${path.relative(process.cwd(), file.path)}`);
+  }
 }
+
+// Rest of the functions remain mostly the same, just with better structure
 
 function detectTestType(targetPath: string): "unit" | "integration" | "e2e" {
   if (targetPath.includes("/app/") || targetPath.includes("/pages/")) {
@@ -75,51 +126,96 @@ interface FileInfo {
 function parseFileInfo(filePath: string, content: string): FileInfo {
   const fileName = path.basename(filePath, path.extname(filePath));
   const componentName = pascalCase(fileName.replace(/\.(tsx?|jsx?)$/, ""));
-  
-  // Simple parsing - in production, use proper AST parsing
-  const isReactComponent = content.includes("export function") && content.includes("return (");
-  const isApiRoute = filePath.includes("/api/") || filePath.includes("/server/");
-  const isPage = filePath.includes("/app/") && fileName === "page";
-  
-  // Extract exported functions (simplified)
-  const exportedFunctions: string[] = [];
-  const exportRegex = /export\s+(async\s+)?function\s+(\w+)/g;
-  let match;
-  while ((match = exportRegex.exec(content)) !== null) {
-    exportedFunctions.push(match[2]);
-  }
-  
-  // Extract imports (simplified)
-  const imports: string[] = [];
-  const importRegex = /import\s+.+\s+from\s+["'](.+)["']/g;
-  while ((match = importRegex.exec(content)) !== null) {
-    imports.push(match[1]);
-  }
-  
+
   return {
     fileName,
     componentName,
-    isReactComponent,
-    isApiRoute,
-    isPage,
-    exportedFunctions,
-    imports,
+    isReactComponent: /import.*from ['"]react['"]/.test(content) || filePath.endsWith(".tsx") || filePath.endsWith(".jsx"),
+    isApiRoute: filePath.includes("/api/") || filePath.includes("/routers/"),
+    isPage: filePath.includes("/app/") && fileName === "page",
+    exportedFunctions: extractExportedFunctions(content),
+    imports: extractImports(content),
   };
 }
 
+function extractExportedFunctions(content: string): string[] {
+  const functions: string[] = [];
+  const exportRegex = /export\s+(async\s+)?function\s+(\w+)/g;
+  let match;
+  while ((match = exportRegex.exec(content)) !== null) {
+    if (match[2]) functions.push(match[2]);
+  }
+  return functions;
+}
+
+function extractImports(content: string): string[] {
+  const imports: string[] = [];
+  const importRegex = /import\s+.*\s+from\s+['"]([^'"]+)['"]/g;
+  let match;
+  while ((match = importRegex.exec(content)) !== null) {
+    if (match[1]) imports.push(match[1]);
+  }
+  return imports;
+}
+
+// Path helper functions
+function getUnitTestPath(filePath: string): string {
+  const dir = path.dirname(filePath);
+  const fileName = path.basename(filePath, path.extname(filePath));
+  const ext = path.extname(filePath);
+
+  // If file is in __tests__ directory, keep it there
+  if (dir.includes("__tests__")) {
+    return filePath.replace(ext, `.test${ext}`);
+  }
+
+  // Otherwise, create parallel __tests__ directory
+  const testDir = path.join(dir, "__tests__");
+  return path.join(testDir, `${fileName}.test${ext}`);
+}
+
+function getIntegrationTestPath(filePath: string): string {
+  const fileName = path.basename(filePath, path.extname(filePath));
+  const ext = path.extname(filePath);
+
+  const integrationDir = path.join(
+    process.cwd(),
+    "tests",
+    "integration"
+  );
+
+  return path.join(integrationDir, `${fileName}.integration.test${ext}`);
+}
+
+function getE2ETestPath(filePath: string): string {
+  const relativePath = path.relative(
+    path.join(process.cwd(), "src", "app"),
+    filePath
+  );
+  const testName = relativePath
+    .replace(/\/(page|layout|loading|error)\.(tsx?|jsx?)$/, "")
+    .replace(/\//g, "-") || "home";
+
+  const e2eDir = path.join(process.cwd(), "tests", "e2e");
+  return path.join(e2eDir, `${testName}.spec.ts`);
+}
+
+// Test generation functions remain the same
 async function generateUnitTest(fileInfo: FileInfo, fileContent: string): Promise<string> {
   if (fileInfo.isReactComponent) {
     return generateReactComponentTest(fileInfo);
-  } else if (fileInfo.isApiRoute) {
-    return generateApiUnitTest(fileInfo);
-  } else {
-    return generateFunctionTest(fileInfo);
   }
+
+  if (fileInfo.isApiRoute) {
+    return generateApiUnitTest(fileInfo);
+  }
+
+  return generateFunctionTest(fileInfo);
 }
 
 function generateReactComponentTest(fileInfo: FileInfo): string {
   const { componentName } = fileInfo;
-  
+
   return `import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ${componentName} } from "./${fileInfo.fileName}";
@@ -211,7 +307,7 @@ describe("${componentName}", () => {
 
 function generateApiUnitTest(fileInfo: FileInfo): string {
   const routerName = camelCase(fileInfo.fileName.replace("Router", ""));
-  
+
   return `import { createInnerTRPCContext } from "~/server/api/trpc";
 import { ${fileInfo.componentName} } from "./${fileInfo.fileName}";
 import { type Session } from "next-auth";
@@ -444,7 +540,7 @@ async function generateIntegrationTest(fileInfo: FileInfo, fileContent: string):
   if (fileInfo.isApiRoute) {
     return generateApiIntegrationTest(fileInfo);
   }
-  
+
   return `import { test, expect } from "@jest/globals";
 
 describe("${fileInfo.componentName} Integration Tests", () => {
@@ -465,7 +561,7 @@ describe("${fileInfo.componentName} Integration Tests", () => {
 
 function generateApiIntegrationTest(fileInfo: FileInfo): string {
   const routerName = camelCase(fileInfo.fileName.replace("Router", ""));
-  
+
   return `import { appRouter } from "~/server/api/root";
 import { createInnerTRPCContext } from "~/server/api/trpc";
 import { type Session } from "next-auth";
@@ -572,7 +668,7 @@ describe("${fileInfo.componentName} Integration Tests", () => {
 
 async function generateE2ETest(fileInfo: FileInfo, fileContent: string): Promise<string> {
   const pageName = fileInfo.componentName.replace("Page", "");
-  const route = fileInfo.fileName === "page" 
+  const route = fileInfo.fileName === "page"
     ? `/${fileInfo.fileName.split("/").slice(-2, -1)[0] || ""}`
     : `/${fileInfo.fileName}`;
 
@@ -711,46 +807,4 @@ async function loginUser(page: any) {
   // ... login steps
 }
 `;
-}
-
-// Path helpers
-function getUnitTestPath(filePath: string): string {
-  const dir = path.dirname(filePath);
-  const fileName = path.basename(filePath, path.extname(filePath));
-  const ext = path.extname(filePath);
-  
-  // If file is in __tests__ directory, keep it there
-  if (dir.includes("__tests__")) {
-    return filePath.replace(ext, `.test${ext}`);
-  }
-  
-  // Otherwise, create parallel __tests__ directory
-  const testDir = path.join(dir, "__tests__");
-  return path.join(testDir, `${fileName}.test${ext}`);
-}
-
-function getIntegrationTestPath(filePath: string): string {
-  const fileName = path.basename(filePath, path.extname(filePath));
-  const ext = path.extname(filePath);
-  
-  const integrationDir = path.join(
-    process.cwd(),
-    "tests",
-    "integration"
-  );
-  
-  return path.join(integrationDir, `${fileName}.integration.test${ext}`);
-}
-
-function getE2ETestPath(filePath: string): string {
-  const relativePath = path.relative(
-    path.join(process.cwd(), "src", "app"),
-    filePath
-  );
-  const testName = relativePath
-    .replace(/\/(page|layout|loading|error)\.(tsx?|jsx?)$/, "")
-    .replace(/\//g, "-") || "home";
-  
-  const e2eDir = path.join(process.cwd(), "tests", "e2e");
-  return path.join(e2eDir, `${testName}.spec.ts`);
 }

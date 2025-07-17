@@ -1,4 +1,4 @@
-//src/server/api/trpc.ts
+// src/server/api/trpc.ts
 
 /**
  * YOU PROBABLY DON'T NEED TO EDIT THIS FILE, UNLESS:
@@ -167,23 +167,71 @@ export const rateLimitedProcedure = protectedProcedure.use(
 );
 
 /**
- * Admin procedure
+ * Enhanced Admin procedure
  *
  * This procedure ensures only admin users can access certain endpoints
+ * Checks the user's role from the database
  */
-export const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
-  // You can add your admin check logic here
-  // For now, we'll check if email ends with your domain
-  const isAdmin = ctx.session.user.email?.endsWith("@yourdomain.com");
+export const adminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
+  // Get user with role from database
+  const user = await ctx.db.user.findUnique({
+    where: { id: ctx.session.user.id },
+    select: { role: true }
+  });
 
-  if (!isAdmin) {
+  if (!user || user.role !== "ADMIN") {
     throw new TRPCError({
       code: "FORBIDDEN",
-      message: "Admin access required",
+      message: "You must be an admin to perform this action"
     });
   }
 
-  return next();
+  return next({
+    ctx: {
+      ...ctx,
+      // Add user role to context for type safety
+      session: {
+        ...ctx.session,
+        user: {
+          ...ctx.session.user,
+          role: user.role
+        }
+      },
+    },
+  });
+});
+
+/**
+ * Developer procedure
+ *
+ * This procedure allows both admins and developers to access endpoints
+ * Used for code generation and development tools
+ */
+export const developerProcedure = protectedProcedure.use(async ({ ctx, next }) => {
+  const user = await ctx.db.user.findUnique({
+    where: { id: ctx.session.user.id },
+    select: { role: true }
+  });
+
+  if (!user || !["ADMIN", "DEVELOPER"].includes(user.role)) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "You must be an admin or developer to perform this action"
+    });
+  }
+
+  return next({
+    ctx: {
+      ...ctx,
+      session: {
+        ...ctx.session,
+        user: {
+          ...ctx.session.user,
+          role: user.role
+        }
+      },
+    },
+  });
 });
 
 /**

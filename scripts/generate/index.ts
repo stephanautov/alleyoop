@@ -27,6 +27,7 @@ program
     .description("Generate a new tRPC router with CRUD operations")
     .option("-m, --model <model>", "Prisma model name")
     .option("-c, --crud", "Include CRUD operations", true)
+    .option("--no-crud", "Exclude CRUD operations")
     .action(async (name: string, options: { model?: string; crud?: boolean }) => {
         console.log(chalk.blue(`🔧 Generating router: ${name}`));
         await generateRouter(name, options);
@@ -49,36 +50,50 @@ program
 program
     .command("document-type <name>")
     .description("Generate a complete document type with all infrastructure")
-    .action(async (name: string) => {
+    .option("--answers <json>", "Provide answers as JSON (for non-interactive mode)")
+    .action(async (name: string, options: { answers?: string }) => {
         console.log(chalk.blue(`📄 Generating document type: ${name}`));
-        const answers = await inquirer.prompt([
-            {
-                type: "input",
-                name: "description",
-                message: "Document type description:",
-            },
-            {
-                type: "checkbox",
-                name: "sections",
-                message: "Select sections to include:",
-                choices: [
-                    "Introduction",
-                    "Background",
-                    "Main Content",
-                    "Analysis",
-                    "Conclusion",
-                    "References",
-                    "Appendix",
-                ],
-            },
-            {
-                type: "checkbox",
-                name: "exportFormats",
-                message: "Select export formats:",
-                choices: ["pdf", "docx", "markdown", "html", "txt"],
-                default: ["pdf", "docx"],
-            },
-        ]);
+
+        let answers;
+        if (options.answers) {
+            // Parse answers from JSON for API mode
+            try {
+                answers = JSON.parse(options.answers);
+            } catch (error) {
+                console.error(chalk.red("Invalid JSON provided for answers"));
+                process.exit(1);
+            }
+        } else {
+            // Interactive mode
+            answers = await inquirer.prompt([
+                {
+                    type: "input",
+                    name: "description",
+                    message: "Document type description:",
+                },
+                {
+                    type: "checkbox",
+                    name: "sections",
+                    message: "Select sections to include:",
+                    choices: [
+                        "Introduction",
+                        "Background",
+                        "Main Content",
+                        "Analysis",
+                        "Conclusion",
+                        "References",
+                        "Appendix",
+                    ],
+                },
+                {
+                    type: "checkbox",
+                    name: "exportFormats",
+                    message: "Select export formats:",
+                    choices: ["pdf", "docx", "markdown", "html", "txt"],
+                    default: ["pdf", "docx"],
+                },
+            ]);
+        }
 
         await generateDocumentType(name, answers);
         console.log(chalk.green(`✅ Document type ${name} generated successfully!`));
@@ -99,34 +114,47 @@ program
 program
     .command("feature <name>")
     .description("Generate a complete feature with API, UI, and tests")
-    .action(async (name: string) => {
+    .option("--answers <json>", "Provide answers as JSON (for non-interactive mode)")
+    .action(async (name: string, options: { answers?: string }) => {
         console.log(chalk.blue(`🚀 Generating complete feature: ${name}`));
 
-        const answers = await inquirer.prompt([
-            {
-                type: "confirm",
-                name: "includeApi",
-                message: "Include API routes?",
-                default: true,
-            },
-            {
-                type: "confirm",
-                name: "includeUi",
-                message: "Include UI components?",
-                default: true,
-            },
-            {
-                type: "confirm",
-                name: "includeTests",
-                message: "Generate tests?",
-                default: true,
-            },
-            {
-                type: "input",
-                name: "model",
-                message: "Prisma model name (if applicable):",
-            },
-        ]);
+        let answers;
+        if (options.answers) {
+            // Parse answers from JSON for API mode
+            try {
+                answers = JSON.parse(options.answers);
+            } catch (error) {
+                console.error(chalk.red("Invalid JSON provided for answers"));
+                process.exit(1);
+            }
+        } else {
+            // Interactive mode
+            answers = await inquirer.prompt([
+                {
+                    type: "confirm",
+                    name: "includeApi",
+                    message: "Include API routes?",
+                    default: true,
+                },
+                {
+                    type: "confirm",
+                    name: "includeUi",
+                    message: "Include UI components?",
+                    default: true,
+                },
+                {
+                    type: "confirm",
+                    name: "includeTests",
+                    message: "Generate tests?",
+                    default: true,
+                },
+                {
+                    type: "input",
+                    name: "model",
+                    message: "Prisma model name (if applicable):",
+                },
+            ]);
+        }
 
         await generateFeature(name, answers);
         console.log(chalk.green(`✅ Feature ${name} generated successfully!`));
@@ -201,7 +229,100 @@ program
                 await generateComponent(componentAnswers.name, componentAnswers);
                 break;
 
-            // ... other cases
+            case "document-type":
+                const docAnswers = await inquirer.prompt([
+                    {
+                        type: "input",
+                        name: "name",
+                        message: "Document type name:",
+                        validate: (input) => input.length > 0,
+                    },
+                    {
+                        type: "input",
+                        name: "description",
+                        message: "Document type description:",
+                    },
+                    {
+                        type: "checkbox",
+                        name: "sections",
+                        message: "Select sections to include:",
+                        choices: [
+                            "Introduction",
+                            "Background",
+                            "Main Content",
+                            "Analysis",
+                            "Conclusion",
+                            "References",
+                            "Appendix",
+                        ],
+                    },
+                    {
+                        type: "checkbox",
+                        name: "exportFormats",
+                        message: "Select export formats:",
+                        choices: ["pdf", "docx", "markdown", "html", "txt"],
+                        default: ["pdf", "docx"],
+                    },
+                ]);
+                await generateDocumentType(docAnswers.name, {
+                    description: docAnswers.description,
+                    sections: docAnswers.sections,
+                    exportFormats: docAnswers.exportFormats,
+                });
+                break;
+
+            case "test":
+                const testAnswers = await inquirer.prompt([
+                    {
+                        type: "input",
+                        name: "path",
+                        message: "File path:",
+                        validate: (input) => input.length > 0,
+                    },
+                    {
+                        type: "list",
+                        name: "type",
+                        message: "Test type:",
+                        choices: ["unit", "integration", "e2e"],
+                    },
+                ]);
+                await generateTest(testAnswers.path, testAnswers);
+                break;
+
+            case "feature":
+                const featureAnswers = await inquirer.prompt([
+                    {
+                        type: "input",
+                        name: "name",
+                        message: "Feature name:",
+                        validate: (input) => input.length > 0,
+                    },
+                    {
+                        type: "confirm",
+                        name: "includeApi",
+                        message: "Include API routes?",
+                        default: true,
+                    },
+                    {
+                        type: "confirm",
+                        name: "includeUi",
+                        message: "Include UI components?",
+                        default: true,
+                    },
+                    {
+                        type: "confirm",
+                        name: "includeTests",
+                        message: "Generate tests?",
+                        default: true,
+                    },
+                    {
+                        type: "input",
+                        name: "model",
+                        message: "Prisma model name (if applicable):",
+                    },
+                ]);
+                await generateFeature(featureAnswers.name, featureAnswers);
+                break;
         }
 
         console.log(chalk.green("✅ Generation complete!"));

@@ -48,6 +48,8 @@ model User {
   image         String?
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
+  role          String     @default("USER") // Add USER, DEVELOPER, ADMIN roles
+
   
   // Relations
   accounts      Account[]
@@ -55,6 +57,8 @@ model User {
   documents     Document[]
   usage         Usage?
   exports       Export[]
+  generatorHistory  GeneratorHistory[]
+  generatorTemplates GeneratorTemplate[]
   
   @@index([email])
 }
@@ -149,6 +153,40 @@ model Template {
   updatedAt   DateTime     @updatedAt
   
   @@index([type, isPublic])
+}
+
+// Generator Models 
+
+model GeneratorHistory {
+  id         String    @id @default(cuid())
+  sessionId  String
+  generator  String
+  filePath   String
+  content    String    @db.Text
+  userId     String
+  createdAt  DateTime  @default(now())
+  deletedAt  DateTime?
+  
+  user       User      @relation(fields: [userId], references: [id])
+  
+  @@index([userId, createdAt])
+  @@index([sessionId])
+}
+
+model GeneratorTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  generator   String
+  config      Json
+  userId      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  user        User     @relation(fields: [userId], references: [id])
+  
+  @@unique([userId, name, generator])
+  @@index([userId, generator])
 }
 
 // Enums

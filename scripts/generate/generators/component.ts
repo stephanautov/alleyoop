@@ -1,16 +1,17 @@
-//scripts/generate/generators/component.ts
+// scripts/generate/generators/component.ts
 
 import fs from "fs/promises";
 import path from "path";
-import { formatCode } from "../utils";
+import { formatCode, kebabCase, humanize, pascalCase } from "../utils";
 
 interface ComponentOptions {
   type?: "component" | "page" | "form";
   dir?: string;
+  dryRun?: boolean;
 }
 
 export async function generateComponent(name: string, options: ComponentOptions) {
-  const componentName = name.charAt(0).toUpperCase() + name.slice(1);
+  const componentName = pascalCase(name);
   const componentType = options.type ?? "component";
 
   // Determine the directory
@@ -66,6 +67,8 @@ export async function generateComponent(name: string, options: ComponentOptions)
   const indexContent = `export * from "./${kebabCase(name)}";`;
   const indexPath = path.join(componentDir, "index.ts");
   await fs.writeFile(indexPath, indexContent);
+
+  console.log(`✅ Component ${componentName} generated at ${path.relative(process.cwd(), componentDir)}`);
 }
 
 function generateDefaultComponent(name: string): string {
@@ -82,8 +85,7 @@ export function ${name}({ className, children, ...props }: ${name}Props) {
       {children}
     </div>
   );
-}
-`;
+}`;
 }
 
 function generatePageComponent(name: string): string {
@@ -123,8 +125,7 @@ export default async function ${name}Page() {
       </Card>
     </div>
   );
-}
-`;
+}`;
 }
 
 function generateFormComponent(name: string): string {
@@ -238,8 +239,7 @@ export function ${name}({ onSuccess, defaultValues }: ${name}Props) {
       </form>
     </Form>
   );
-}
-`;
+}`;
 }
 
 function generateComponentTest(name: string, type: string): string {
@@ -255,8 +255,7 @@ describe("${testName}", () => {
   });
 
   // Add more tests as needed
-});
-`;
+});`;
 }
 
 function generateComponentStories(name: string): string {
@@ -288,21 +287,5 @@ export const WithCustomClass: Story = {
   args: {
     className: "bg-gray-100 p-4 rounded",
   },
-};
-`;
-}
-
-// Utility functions
-function kebabCase(str: string): string {
-  return str
-    .replace(/([a-z])([A-Z])/g, "$1-$2")
-    .replace(/[\s_]+/g, "-")
-    .toLowerCase();
-}
-
-function humanize(str: string): string {
-  return str
-    .replace(/([A-Z])/g, " $1")
-    .replace(/^./, (str) => str.toUpperCase())
-    .trim();
+};`;
 }
