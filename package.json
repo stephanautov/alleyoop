@@ -29,6 +29,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.56.0",
     "@auth/prisma-adapter": "^2.10.0",
+    "@google/generative-ai": "^0.24.1",
     "@hookform/resolvers": "^5.1.1",
     "@prisma/client": "^6.5.0",
     "@radix-ui/react-accordion": "^1.2.11",
@@ -91,6 +92,7 @@
     "react-syntax-highlighter": "^15.6.1",
     "recharts": "^3.1.0",
     "remark": "^15.0.1",
+    "replicate": "^1.0.1",
     "server-only": "^0.0.1",
     "sonner": "^2.0.6",
     "superjson": "^2.2.1",

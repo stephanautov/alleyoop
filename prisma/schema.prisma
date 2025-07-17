@@ -41,25 +41,30 @@ model Session {
 }
 
 model User {
-  id            String     @id @default(cuid())
+  id            String    @id @default(cuid())
   name          String?
-  email         String?    @unique
+  email         String?   @unique
   emailVerified DateTime?
   image         String?
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
-  role          String     @default("USER") // Add USER, DEVELOPER, ADMIN roles
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  role          String    @default("USER") // Add USER, DEVELOPER, ADMIN roles
 
-  
   // Relations
-  accounts      Account[]
-  sessions      Session[]
-  documents     Document[]
-  usage         Usage?
-  exports       Export[]
-  generatorHistory  GeneratorHistory[]
+  accounts           Account[]
+  sessions           Session[]
+  documents          Document[]
+  usage              Usage?
+  exports            Export[]
+  generatorHistory   GeneratorHistory[]
   generatorTemplates GeneratorTemplate[]
-  
+  generatorMetrics  GeneratorMetrics[]
+  generatorErrors   GeneratorError[]
+
+  generatorMetrics GeneratorMetrics[]
+  generatorErrors  GeneratorError[]
+  knowledgeSources KnowledgeSource[]
+
   @@index([email])
 }
 
@@ -73,70 +78,80 @@ model VerificationToken {
 
 // Document Models
 model Document {
-  id            String         @id @default(cuid())
-  userId        String
-  title         String
-  type          DocumentType
-  status        DocumentStatus @default(PENDING)
-  input         Json           // Stores the user input/configuration
-  outline       Json?          // Stores the generated outline
-  sections      Json?          // Stores the generated sections
-  wordCount     Int            @default(0)
-  
+  id        String         @id @default(cuid())
+  userId    String
+  title     String
+  type      DocumentType
+  status    DocumentStatus @default(PENDING)
+  input     Json // Stores the user input/configuration
+  outline   Json? // Stores the generated outline
+  sections  Json? // Stores the generated sections
+  wordCount Int            @default(0)
+
   // Metadata
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  completedAt   DateTime?
-  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  completedAt DateTime?
+
+  // LLM-specific fields
+  provider    String? // "openai" | "anthropic"
+  model       String? // "gpt-4" | "claude-3"
+  temperature Float   @default(0.7)
+  maxTokens   Int?
+
+  // Generation metadata
+  llmCalls LLMCall[]
   // Relations
-  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  exports       Export[]
-  jobId         String?        // BullMQ job ID for tracking
-  
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exports  Export[]
+  jobId    String? // BullMQ job ID for tracking
+
   // Costs
-  promptTokens  Int            @default(0)
+  promptTokens     Int         @default(0)
   completionTokens Int         @default(0)
-  totalCost     Float          @default(0)
-  
+  totalCost        Float       @default(0)
+  Embedding        Embedding[]
+
   @@index([userId, status])
   @@index([type])
   @@index([createdAt])
+  @@index([provider])
 }
 
 model Export {
-  id          String       @id @default(cuid())
-  documentId  String
-  userId      String
-  format      ExportFormat
-  url         String?      // URL to download the export
-  status      ExportStatus @default(PROCESSING)
-  createdAt   DateTime     @default(now())
-  expiresAt   DateTime?    // When the export URL expires
-  
+  id         String       @id @default(cuid())
+  documentId String
+  userId     String
+  format     ExportFormat
+  url        String? // URL to download the export
+  status     ExportStatus @default(PROCESSING)
+  createdAt  DateTime     @default(now())
+  expiresAt  DateTime? // When the export URL expires
+
   // Relations
-  document    Document     @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([documentId])
   @@index([userId])
   @@index([status])
 }
 
 model Usage {
-  id              String   @id @default(cuid())
-  userId          String   @unique
-  documentsCount  Int      @default(0)
-  totalTokens     Int      @default(0)
-  totalCost       Float    @default(0)
-  
+  id             String @id @default(cuid())
+  userId         String @unique
+  documentsCount Int    @default(0)
+  totalTokens    Int    @default(0)
+  totalCost      Float  @default(0)
+
   // Monthly limits (reset monthly)
-  monthlyDocs     Int      @default(0)
-  monthlyTokens   Int      @default(0)
-  monthlyResetAt  DateTime @default(now())
-  
+  monthlyDocs    Int      @default(0)
+  monthlyTokens  Int      @default(0)
+  monthlyResetAt DateTime @default(now())
+
   // Relations
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
 }
 
@@ -146,29 +161,29 @@ model Template {
   name        String
   description String?
   type        DocumentType
-  config      Json         // Default configuration for this template
+  config      Json // Default configuration for this template
   isPublic    Boolean      @default(false)
-  createdBy   String?      // User ID who created it (null for system templates)
+  createdBy   String? // User ID who created it (null for system templates)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
-  
+
   @@index([type, isPublic])
 }
 
 // Generator Models 
 
 model GeneratorHistory {
-  id         String    @id @default(cuid())
-  sessionId  String
-  generator  String
-  filePath   String
-  content    String    @db.Text
-  userId     String
-  createdAt  DateTime  @default(now())
-  deletedAt  DateTime?
-  
-  user       User      @relation(fields: [userId], references: [id])
-  
+  id        String    @id @default(cuid())
+  sessionId String
+  generator String
+  filePath  String
+  content   String    @db.Text
+  userId    String
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id])
+
   @@index([userId, createdAt])
   @@index([sessionId])
 }
@@ -182,9 +197,9 @@ model GeneratorTemplate {
   userId      String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  
-  user        User     @relation(fields: [userId], references: [id])
-  
+
+  user User @relation(fields: [userId], references: [id])
+
   @@unique([userId, name, generator])
   @@index([userId, generator])
 }
@@ -219,4 +234,99 @@ enum ExportStatus {
   COMPLETED
   FAILED
   EXPIRED
+}
+
+enum SourceType {
+  DOCUMENT
+  WEBSITE
+  API
+}
+
+model GeneratorMetrics {
+  id             String   @id @default(cuid())
+  generator      String
+  userId         String
+  success        Boolean  @default(true)
+  duration       Int
+  filesGenerated Int      @default(0)
+  error          String?
+  createdAt      DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([generator])
+}
+
+model GeneratorError {
+  id        String   @id @default(cuid())
+  generator String
+  userId    String
+  error     String   @db.Text
+  stack     String?  @db.Text
+  context   Json?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([generator])
+}
+
+model LLMCall {
+  id         String   @id @default(cuid())
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  provider String
+  model    String
+  prompt   String @db.Text
+  response String @db.Text
+
+  promptTokens     Int
+  completionTokens Int
+  totalTokens      Int
+  cost             Float
+
+  createdAt DateTime @default(now())
+  duration  Int // milliseconds
+
+  @@index([documentId])
+  @@index([createdAt])
+  @@index([provider])
+}
+
+model KnowledgeSource {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name    String
+  type    SourceType // DOCUMENT, WEBSITE, API
+  url     String?
+  content String     @db.Text
+
+  embeddings Embedding[]
+  lastSynced DateTime?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  @@index([userId])
+}
+
+model Embedding {
+  id         String           @id @default(cuid())
+  sourceId   String?
+  source     KnowledgeSource? @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  documentId String?
+  document   Document?        @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  content   String @db.Text
+  embedding Json // Store as JSON for now, can migrate to pgvector later
+  metadata  Json
+
+  createdAt DateTime @default(now())
+
+  @@index([sourceId])
+  @@index([documentId])
 }
