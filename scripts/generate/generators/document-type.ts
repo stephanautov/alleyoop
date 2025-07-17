@@ -2,7 +2,13 @@
 
 import fs from "fs/promises";
 import path from "path";
-import { formatCode, constantCase, pascalCase, camelCase, kebabCase } from "../utils";
+import {
+  formatCode,
+  constantCase,
+  pascalCase,
+  camelCase,
+  kebabCase,
+} from "../utils";
 
 interface DocumentTypeOptions {
   description: string;
@@ -16,7 +22,10 @@ interface FileToGenerate {
   content: string;
 }
 
-export async function generateDocumentType(name: string, options: DocumentTypeOptions) {
+export async function generateDocumentType(
+  name: string,
+  options: DocumentTypeOptions,
+) {
   const typeName = constantCase(name);
   const pascalName = pascalCase(name);
   const camelName = camelCase(name);
@@ -33,23 +42,38 @@ export async function generateDocumentType(name: string, options: DocumentTypeOp
     "src",
     "config",
     "schemas",
-    `${kebabName}.ts`
+    `${kebabName}.ts`,
   );
-  const schemaContent = await formatCode(createDocumentSchema(camelName, pascalName, options));
+  const schemaContent = await formatCode(
+    createDocumentSchema(camelName, pascalName, options),
+  );
   filesToGenerate.push({ path: schemaPath, content: schemaContent });
 
   // 2. Prompt templates
-  const promptDir = path.join(process.cwd(), "src", "lib", "ai", "prompts", kebabName);
+  const promptDir = path.join(
+    process.cwd(),
+    "src",
+    "lib",
+    "ai",
+    "prompts",
+    kebabName,
+  );
 
   // Outline prompt
   const outlinePromptPath = path.join(promptDir, "outline.md");
   const outlinePromptContent = createOutlinePrompt(pascalName, options);
-  filesToGenerate.push({ path: outlinePromptPath, content: outlinePromptContent });
+  filesToGenerate.push({
+    path: outlinePromptPath,
+    content: outlinePromptContent,
+  });
 
   // Section prompt
   const sectionPromptPath = path.join(promptDir, "section.md");
   const sectionPromptContent = createSectionPrompt(pascalName, options);
-  filesToGenerate.push({ path: sectionPromptPath, content: sectionPromptContent });
+  filesToGenerate.push({
+    path: sectionPromptPath,
+    content: sectionPromptContent,
+  });
 
   // 3. Form configuration
   const formConfigPath = path.join(
@@ -57,15 +81,20 @@ export async function generateDocumentType(name: string, options: DocumentTypeOp
     "src",
     "config",
     "forms",
-    `${kebabName}.ts`
+    `${kebabName}.ts`,
   );
-  const formConfigContent = await formatCode(createFormConfig(camelName, pascalName));
+  const formConfigContent = await formatCode(
+    createFormConfig(camelName, pascalName),
+  );
   filesToGenerate.push({ path: formConfigPath, content: formConfigContent });
 
   // 4. AI service update instructions
   const instructionsPath = path.join(promptDir, "UPDATE_AI_SERVICE.md");
   const instructionsContent = createAIServiceInstructions(typeName, pascalName);
-  filesToGenerate.push({ path: instructionsPath, content: instructionsContent });
+  filesToGenerate.push({
+    path: instructionsPath,
+    content: instructionsContent,
+  });
 
   // Handle dry-run mode
   if (options.dryRun) {
@@ -75,11 +104,13 @@ export async function generateDocumentType(name: string, options: DocumentTypeOp
       console.log(`File size: ${file.content.length} bytes`);
 
       // Emit preview data
-      process.stdout.write(JSON.stringify({
-        type: "preview-file",
-        path: file.path,
-        content: file.content
-      }) + "\n");
+      process.stdout.write(
+        JSON.stringify({
+          type: "preview-file",
+          path: file.path,
+          content: file.content,
+        }) + "\n",
+      );
     }
 
     // Show what would be updated
@@ -87,7 +118,9 @@ export async function generateDocumentType(name: string, options: DocumentTypeOp
     console.log(`Would add to DocumentType enum: ${typeName}`);
 
     console.log(`\nWould update: src/config/documents.ts`);
-    console.log(`Would import: ${camelName}Schema from "./schemas/${kebabName}"`);
+    console.log(
+      `Would import: ${camelName}Schema from "./schemas/${kebabName}"`,
+    );
     console.log(`Would add config entry: [DocumentType.${typeName}]: { ... }`);
 
     console.log(`\nWould update: .env.example`);
@@ -100,7 +133,9 @@ export async function generateDocumentType(name: string, options: DocumentTypeOp
     console.log(`1. Run 'npm run db:push' to update the database`);
     console.log(`2. Set ENABLE_${typeName}="true" in your .env file`);
     console.log(`3. Add ENABLE_${typeName} to src/env.js schema`);
-    console.log(`4. Customize the prompt templates in src/lib/ai/prompts/${kebabName}/`);
+    console.log(
+      `4. Customize the prompt templates in src/lib/ai/prompts/${kebabName}/`,
+    );
     console.log(`5. Test the new document type in the UI`);
 
     return;
@@ -124,11 +159,16 @@ export async function generateDocumentType(name: string, options: DocumentTypeOp
   console.log(`1. Run 'npm run db:push' to update the database`);
   console.log(`2. Set ENABLE_${typeName}="true" in your .env file`);
   console.log(`3. Add ENABLE_${typeName} to src/env.js schema`);
-  console.log(`4. Customize the prompt templates in src/lib/ai/prompts/${kebabName}/`);
+  console.log(
+    `4. Customize the prompt templates in src/lib/ai/prompts/${kebabName}/`,
+  );
   console.log(`5. Test the new document type in the UI`);
 }
 
-async function updatePrismaSchema(typeName: string, options: { dryRun?: boolean }) {
+async function updatePrismaSchema(
+  typeName: string,
+  options: { dryRun?: boolean },
+) {
   if (options.dryRun) return; // Skip in dry-run mode
 
   const schemaPath = path.join(process.cwd(), "prisma", "schema.prisma");
@@ -144,13 +184,18 @@ async function updatePrismaSchema(typeName: string, options: { dryRun?: boolean 
       const existingTypes = match[1];
       if (!existingTypes.includes(typeName)) {
         const updatedTypes = existingTypes.trimEnd() + `\n  ${typeName}`;
-        content = content.replace(enumRegex, `enum DocumentType {${updatedTypes}\n}`);
+        content = content.replace(
+          enumRegex,
+          `enum DocumentType {${updatedTypes}\n}`,
+        );
         await fs.writeFile(schemaPath, content);
         console.log(`✓ Updated Prisma schema with ${typeName}`);
       }
     }
   } catch (error) {
-    console.warn("Could not update Prisma schema automatically. Please add the type manually.");
+    console.warn(
+      "Could not update Prisma schema automatically. Please add the type manually.",
+    );
   }
 }
 
@@ -158,7 +203,7 @@ async function updateDocumentConfig(
   typeName: string,
   pascalName: string,
   camelName: string,
-  options: DocumentTypeOptions & { dryRun?: boolean }
+  options: DocumentTypeOptions & { dryRun?: boolean },
 ) {
   if (options.dryRun) return; // Skip in dry-run mode
 
@@ -171,7 +216,10 @@ async function updateDocumentConfig(
     const schemaImport = `${camelName}Schema`;
     if (!content.includes(schemaImport)) {
       const lastImportIndex = content.lastIndexOf("} from");
-      const importLine = content.substring(0, content.indexOf("\n", lastImportIndex));
+      const importLine = content.substring(
+        0,
+        content.indexOf("\n", lastImportIndex),
+      );
       const updatedImport = importLine.replace("}", `, ${schemaImport} }`);
       content = content.replace(importLine, updatedImport);
     }
@@ -179,16 +227,19 @@ async function updateDocumentConfig(
     // Add document configuration
     const configEntry = `  [DocumentType.${typeName}]: {
     schema: ${schemaImport},
-    name: "${pascalName.replace(/([A-Z])/g, ' $1').trim()}",
+    name: "${pascalName.replace(/([A-Z])/g, " $1").trim()}",
     description: "${options.description}",
     icon: "FileText",
     enabled: env.ENABLE_${typeName},
     sections: [
-${options.sections.map((section, index) =>
-      `      { id: "${kebabCase(section)}", name: "${section}", order: ${index + 1} },`
-    ).join('\n')}
+${options.sections
+  .map(
+    (section, index) =>
+      `      { id: "${kebabCase(section)}", name: "${section}", order: ${index + 1} },`,
+  )
+  .join("\n")}
     ],
-    exportFormats: [${options.exportFormats.map(f => `"${f}"`).join(", ")}],
+    exportFormats: [${options.exportFormats.map((f) => `"${f}"`).join(", ")}],
     estimatedTokens: {
       short: 2000,
       medium: 4000,
@@ -197,22 +248,31 @@ ${options.sections.map((section, index) =>
   },`;
 
     // Find the DOCUMENT_CONFIGS object
-    const configRegex = /export const DOCUMENT_CONFIGS = {([^}]+)}\s*as const;/s;
+    const configRegex =
+      /export const DOCUMENT_CONFIGS = {([^}]+)}\s*as const;/s;
     const configMatch = content.match(configRegex);
 
     if (configMatch) {
       const existingConfigs = configMatch[1];
-      const updatedConfigs = existingConfigs.trimEnd() + '\n' + configEntry;
-      content = content.replace(configRegex, `export const DOCUMENT_CONFIGS = {${updatedConfigs}\n} as const;`);
+      const updatedConfigs = existingConfigs.trimEnd() + "\n" + configEntry;
+      content = content.replace(
+        configRegex,
+        `export const DOCUMENT_CONFIGS = {${updatedConfigs}\n} as const;`,
+      );
       await fs.writeFile(configPath, await formatCode(content));
       console.log(`✓ Updated document configuration`);
     }
   } catch (error) {
-    console.warn("Could not update document config automatically. Please add it manually.");
+    console.warn(
+      "Could not update document config automatically. Please add it manually.",
+    );
   }
 }
 
-async function addEnvironmentVariable(typeName: string, options: { dryRun?: boolean }) {
+async function addEnvironmentVariable(
+  typeName: string,
+  options: { dryRun?: boolean },
+) {
   if (options.dryRun) return; // Skip in dry-run mode
 
   const envExamplePath = path.join(process.cwd(), ".env.example");
@@ -221,7 +281,12 @@ async function addEnvironmentVariable(typeName: string, options: { dryRun?: bool
 
   try {
     // Update .env.example
-    if (await fs.access(envExamplePath).then(() => true).catch(() => false)) {
+    if (
+      await fs
+        .access(envExamplePath)
+        .then(() => true)
+        .catch(() => false)
+    ) {
       const content = await fs.readFile(envExamplePath, "utf-8");
       if (!content.includes(`ENABLE_${typeName}`)) {
         await fs.appendFile(envExamplePath, envLine);
@@ -230,7 +295,12 @@ async function addEnvironmentVariable(typeName: string, options: { dryRun?: bool
     }
 
     // Update .env.local
-    if (await fs.access(envLocalPath).then(() => true).catch(() => false)) {
+    if (
+      await fs
+        .access(envLocalPath)
+        .then(() => true)
+        .catch(() => false)
+    ) {
       const content = await fs.readFile(envLocalPath, "utf-8");
       if (!content.includes(`ENABLE_${typeName}`)) {
         await fs.appendFile(envLocalPath, envLine);
@@ -245,7 +315,11 @@ async function addEnvironmentVariable(typeName: string, options: { dryRun?: bool
 }
 
 // Content generation functions
-function createDocumentSchema(camelName: string, pascalName: string, options: DocumentTypeOptions): string {
+function createDocumentSchema(
+  camelName: string,
+  pascalName: string,
+  options: DocumentTypeOptions,
+): string {
   return `import { z } from "zod";
 import { baseDocumentSchema } from "./base";
 
@@ -258,8 +332,8 @@ export const ${camelName}Schema = baseDocumentSchema.extend({
   
   // Sections to include
   sections: z.array(z.enum([
-${options.sections.map(section => `    "${kebabCase(section)}",`).join('\n')}
-  ])).default([${options.sections.map(section => `"${kebabCase(section)}"`).join(", ")}]),
+${options.sections.map((section) => `    "${kebabCase(section)}",`).join("\n")}
+  ])).default([${options.sections.map((section) => `"${kebabCase(section)}"`).join(", ")}]),
   
   // Document-specific options
   format: z.enum(["standard", "detailed", "summary"]).default("standard"),
@@ -271,13 +345,16 @@ ${options.sections.map(section => `    "${kebabCase(section)}",`).join('\n')}
 export type ${pascalName}Input = z.infer<typeof ${camelName}Schema>;`;
 }
 
-function createOutlinePrompt(pascalName: string, options: DocumentTypeOptions): string {
+function createOutlinePrompt(
+  pascalName: string,
+  options: DocumentTypeOptions,
+): string {
   return `# ${pascalName} Document Outline Prompt
 
 You are an expert at creating comprehensive ${pascalName.toLowerCase()} documents. 
 Generate a detailed outline for a ${pascalName.toLowerCase()} with the following sections:
 
-${options.sections.map(section => `- ${section}`).join('\n')}
+${options.sections.map((section) => `- ${section}`).join("\n")}
 
 ## Input Details:
 {{input}}
@@ -304,7 +381,10 @@ Return a JSON object with the following structure:
 }`;
 }
 
-function createSectionPrompt(pascalName: string, options: DocumentTypeOptions): string {
+function createSectionPrompt(
+  pascalName: string,
+  options: DocumentTypeOptions,
+): string {
   return `# ${pascalName} Section Generation Prompt
 
 Generate the "{{sectionName}}" section for a ${pascalName.toLowerCase()} document.
@@ -369,7 +449,10 @@ export const ${camelName}FormConfig = {
 // },`;
 }
 
-function createAIServiceInstructions(typeName: string, pascalName: string): string {
+function createAIServiceInstructions(
+  typeName: string,
+  pascalName: string,
+): string {
   return `# AI Service Update Instructions
 
 To complete the ${pascalName} document type integration, update the AI service:

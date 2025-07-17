@@ -58,14 +58,39 @@ model User {
   exports            Export[]
   generatorHistory   GeneratorHistory[]
   generatorTemplates GeneratorTemplate[]
-  generatorMetrics  GeneratorMetrics[]
-  generatorErrors   GeneratorError[]
-
-  generatorMetrics GeneratorMetrics[]
-  generatorErrors  GeneratorError[]
-  knowledgeSources KnowledgeSource[]
+  generatorMetrics   GeneratorMetrics[]
+  generatorErrors    GeneratorError[]
+  userPreferences    UserPreferences?
+  knowledgeSources   KnowledgeSource[]
+  cacheEntries       CacheEntry[]
 
   @@index([email])
+}
+
+model UserPreferences {
+  id                String  @id @default(cuid())
+  userId            String  @unique
+  defaultProvider   String? @default("openai")
+  providerModels    Json    @default("{}")
+  temperature       Float   @default(0.7)
+  maxTokensOverride Int?
+  systemPromptStyle String  @default("professional")
+  monthlyCostLimit  Float?
+  costAlertEmail    Boolean @default(true)
+  costAlertWebhook  String?
+  preferSpeed       Boolean @default(false)
+  allowFallback     Boolean @default(true)
+  cacheEnabled      Boolean @default(true)
+
+  // RAG preferences
+  ragEnabled       Boolean @default(false)
+  autoRAGThreshold Float?  @default(0.7)
+  preferredStorage String  @default("local")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model VerificationToken {
@@ -105,6 +130,10 @@ model Document {
   user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   exports  Export[]
   jobId    String? // BullMQ job ID for tracking
+
+  // RAG relationship
+  knowledgeSources KnowledgeSource[] @relation("DocumentKnowledgeSources")
+  ragContext       Json? // Stored RAG context used
 
   // Costs
   promptTokens     Int         @default(0)
@@ -204,44 +233,6 @@ model GeneratorTemplate {
   @@index([userId, generator])
 }
 
-// Enums
-enum DocumentType {
-  BIOGRAPHY
-  CASE_SUMMARY
-  BUSINESS_PLAN
-  MEDICAL_REPORT
-  GRANT_PROPOSAL
-}
-
-enum DocumentStatus {
-  PENDING
-  PROCESSING
-  COMPLETED
-  FAILED
-  CANCELLED
-}
-
-enum ExportFormat {
-  PDF
-  DOCX
-  MARKDOWN
-  HTML
-  TXT
-}
-
-enum ExportStatus {
-  PROCESSING
-  COMPLETED
-  FAILED
-  EXPIRED
-}
-
-enum SourceType {
-  DOCUMENT
-  WEBSITE
-  API
-}
-
 model GeneratorMetrics {
   id             String   @id @default(cuid())
   generator      String
@@ -299,34 +290,122 @@ model LLMCall {
 model KnowledgeSource {
   id     String @id @default(cuid())
   userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id])
 
-  name    String
-  type    SourceType // DOCUMENT, WEBSITE, API
-  url     String?
-  content String     @db.Text
+  name         String
+  description  String?
+  type         SourceType @default(DOCUMENT)
+  mimeType     String?
+  originalName String?
+  fileSize     Int?
+  url          String?
+
+  // Storage
+  storageKey String? @unique
+  content    String? @db.Text
+
+  // Processing status
+  status      ProcessingStatus @default(PENDING)
+  error       String?
+  processedAt DateTime?
+
+  // Metadata
+  metadata Json?
+  tags     String[] @default([])
 
   embeddings Embedding[]
-  lastSynced DateTime?
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
+  documents  Document[]  @relation("DocumentKnowledgeSources")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([userId])
+  @@index([status])
 }
 
 model Embedding {
-  id         String           @id @default(cuid())
-  sourceId   String?
-  source     KnowledgeSource? @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  id       String          @id @default(cuid())
+  sourceId String
+  source   KnowledgeSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  // Content and embedding
+  chunkIndex Int
+  content    String @db.Text
+  embedding  Json // Store as JSON for now
+
+  // Metadata for better retrieval
+  metadata   Json?
+  tokenCount Int?
+
+  createdAt  DateTime  @default(now())
+  Document   Document? @relation(fields: [documentId], references: [id])
   documentId String?
-  document   Document?        @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
-  content   String @db.Text
-  embedding Json // Store as JSON for now, can migrate to pgvector later
-  metadata  Json
-
-  createdAt DateTime @default(now())
-
+  @@unique([sourceId, chunkIndex])
   @@index([sourceId])
-  @@index([documentId])
+}
+
+model CacheEntry {
+  id           String   @id @default(cuid())
+  key          String   @unique
+  value        Json
+  provider     String
+  model        String
+  hits         Int      @default(0)
+  userId       String?
+  user         User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documentType String?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  metadata     Json?
+
+  @@index([expiresAt])
+  @@index([provider, model])
+  @@index([userId])
+}
+
+// Enums
+enum DocumentType {
+  BIOGRAPHY
+  CASE_SUMMARY
+  BUSINESS_PLAN
+  MEDICAL_REPORT
+  GRANT_PROPOSAL
+}
+
+enum DocumentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum ExportFormat {
+  PDF
+  DOCX
+  MARKDOWN
+  HTML
+  TXT
+}
+
+enum ExportStatus {
+  PROCESSING
+  COMPLETED
+  FAILED
+  EXPIRED
+}
+
+enum SourceType {
+  DOCUMENT
+  WEBSITE
+  API
+  MANUAL_ENTRY
+}
+
+enum ProcessingStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
 }

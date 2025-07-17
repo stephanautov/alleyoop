@@ -1,35 +1,34 @@
 #!/usr/bin/env node
-import { PrismaClient } from '@prisma/client';
-import { execSync } from 'child_process';
-import * as fs from 'fs/promises';
-import * as path from 'path';
+import { PrismaClient } from "@prisma/client";
+import { execSync } from "child_process";
+import * as fs from "fs/promises";
+import * as path from "path";
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🔧 Starting DocuForge database fixes...\n');
+  console.log("🔧 Starting DocuForge database fixes...\n");
 
   try {
     // Update Prisma Schema
-    console.log('📝 Updating Prisma schema...');
+    console.log("📝 Updating Prisma schema...");
     await updatePrismaSchema();
 
     // Generate Prisma Client
-    console.log('\n🏗️  Generating Prisma client...');
-    execSync('npx prisma generate', { stdio: 'inherit' });
+    console.log("\n🏗️  Generating Prisma client...");
+    execSync("npx prisma generate", { stdio: "inherit" });
 
     // Push schema changes
-    console.log('\n🚀 Pushing schema changes to database...');
-    execSync('npx prisma db push --skip-generate', { stdio: 'inherit' });
+    console.log("\n🚀 Pushing schema changes to database...");
+    execSync("npx prisma db push --skip-generate", { stdio: "inherit" });
 
     // Run custom migrations
-    console.log('\n🔄 Running custom SQL migrations...');
+    console.log("\n🔄 Running custom SQL migrations...");
     await runCustomMigrations();
 
-    console.log('\n✅ Database fixes completed successfully!');
-
+    console.log("\n✅ Database fixes completed successfully!");
   } catch (error) {
-    console.error('❌ Error during database fixes:', error);
+    console.error("❌ Error during database fixes:", error);
     process.exit(1);
   } finally {
     await prisma.$disconnect();
@@ -37,14 +36,14 @@ async function main() {
 }
 
 async function updatePrismaSchema() {
-  const schemaPath = path.join(process.cwd(), 'prisma', 'schema.prisma');
-  let content = await fs.readFile(schemaPath, 'utf-8');
+  const schemaPath = path.join(process.cwd(), "prisma", "schema.prisma");
+  let content = await fs.readFile(schemaPath, "utf-8");
 
   // Add role to User model
   if (!content.includes('role          String     @default("USER")')) {
     content = content.replace(
       /updatedAt     DateTime   @updatedAt/,
-      'updatedAt     DateTime   @updatedAt\n  role          String     @default("USER")'
+      'updatedAt     DateTime   @updatedAt\n  role          String     @default("USER")',
     );
   }
 
@@ -80,26 +79,26 @@ model GeneratorError {
   
   @@index([userId])
   @@index([generator])
-}`
+}`,
   ];
 
   for (const model of modelsToAdd) {
     const modelName = model.match(/model (\w+)/)?.[1];
     if (modelName && !content.includes(`model ${modelName}`)) {
-      content += '\n' + model;
+      content += "\n" + model;
     }
   }
 
   // Update User relations
-  if (!content.includes('generatorMetrics  GeneratorMetrics[]')) {
+  if (!content.includes("generatorMetrics  GeneratorMetrics[]")) {
     content = content.replace(
       /generatorTemplates GeneratorTemplate\[\]/,
-      'generatorTemplates GeneratorTemplate[]\n  generatorMetrics  GeneratorMetrics[]\n  generatorErrors   GeneratorError[]'
+      "generatorTemplates GeneratorTemplate[]\n  generatorMetrics  GeneratorMetrics[]\n  generatorErrors   GeneratorError[]",
     );
   }
 
   await fs.writeFile(schemaPath, content);
-  console.log('✓ Prisma schema updated');
+  console.log("✓ Prisma schema updated");
 }
 
 async function runCustomMigrations() {
@@ -112,7 +111,7 @@ async function runCustomMigrations() {
       await prisma.$executeRawUnsafe(migration);
       console.log(`✓ Migration executed`);
     } catch (error: any) {
-      if (!error.message.includes('already exists')) {
+      if (!error.message.includes("already exists")) {
         console.warn(`⚠️  Migration warning: ${error.message}`);
       }
     }

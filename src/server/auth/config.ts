@@ -41,19 +41,23 @@ export const authConfig = {
     //   ? [DiscordProvider]
     //   : []),
     // Add Google provider
-    ...(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET &&
-      env.GOOGLE_CLIENT_ID.length > 0 && env.GOOGLE_CLIENT_SECRET.length > 0
-      ? [GoogleProvider({
-        clientId: env.GOOGLE_CLIENT_ID,
-        clientSecret: env.GOOGLE_CLIENT_SECRET,
-        authorization: {
-          params: {
-            prompt: "consent",
-            access_type: "offline",
-            response_type: "code",
-          },
-        },
-      })]
+    ...(env.GOOGLE_CLIENT_ID &&
+    env.GOOGLE_CLIENT_SECRET &&
+    env.GOOGLE_CLIENT_ID.length > 0 &&
+    env.GOOGLE_CLIENT_SECRET.length > 0
+      ? [
+          GoogleProvider({
+            clientId: env.GOOGLE_CLIENT_ID,
+            clientSecret: env.GOOGLE_CLIENT_SECRET,
+            authorization: {
+              params: {
+                prompt: "consent",
+                access_type: "offline",
+                response_type: "code",
+              },
+            },
+          }),
+        ]
       : []),
   ],
   adapter: PrismaAdapter(db),

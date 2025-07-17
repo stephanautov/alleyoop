@@ -1,4 +1,4 @@
-//src/env.js
+// src/env.js
 
 import { createEnv } from "@t3-oss/env-nextjs";
 import { z } from "zod";
@@ -32,7 +32,7 @@ export const env = createEnv({
       (str) => process.env.VERCEL_URL ?? str,
       process.env.VERCEL ? z.string() : z.string().url()
     ),
-    AUTH_SECRET: z.string().optional(), // Compatibility with some auth providers
+    AUTH_SECRET: z.string().optional(),
 
     // OAuth Providers
     GOOGLE_CLIENT_ID: z.string().optional(),
@@ -82,18 +82,52 @@ export const env = createEnv({
     MAX_TOKENS_PER_REQUEST: z.coerce.number().default(4000),
     MAX_COST_PER_DOCUMENT: z.coerce.number().default(0.50),
 
+    // Storage Configuration
+    STORAGE_PROVIDER: z.enum(["local", "s3", "postgresql"]).default("local"),
+    UPLOAD_DIR: z.string().default("./uploads"),
+
+    // AWS S3 (optional)
+    AWS_REGION: z.string().optional(),
+    AWS_ACCESS_KEY_ID: z.string().optional(),
+    AWS_SECRET_ACCESS_KEY: z.string().optional(),
+    AWS_S3_BUCKET: z.string().optional(),
+
     // Email Service
     RESEND_API_KEY: z.string().optional(),
     FROM_EMAIL: z.string().email().optional(),
 
-    // File Storage
-    UPLOAD_DIR: z.string().default("./uploads"),
+    // WebSocket Configuration
+    SOCKET_PORT: z.coerce.number().optional().default(3001),
+    SOCKET_PATH: z.string().optional().default("/api/socket"),
+    SOCKET_ADMIN_PASSWORD: z.string().optional(),
+    WEB_CONCURRENCY: z.coerce.number().optional().default(1),
 
     // General Rate Limiting
     RATE_LIMIT_MAX: z.coerce.number().default(10),
     RATE_LIMIT_WINDOW: z.coerce.number().default(60),
 
-    // Vector Store (Future RAG)
+    // Caching
+    CACHE_TTL_DEFAULT: z.coerce.number().default(86400),
+    CACHE_MAX_SIZE_MB: z.coerce.number().default(1000),
+    CACHE_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true")
+      .default("true"),
+
+    // Monitoring
+    ANALYTICS_RETENTION_DAYS: z.coerce.number().default(90),
+    COST_ALERT_THRESHOLD: z.coerce.number().default(100),
+
+    // Error Recovery
+    MAX_RETRY_ATTEMPTS: z.coerce.number().default(3),
+    FALLBACK_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true")
+      .default("true"),
+
+    // Vector Store (RAG)
     PINECONE_API_KEY: z.string().optional(),
     PINECONE_ENVIRONMENT: z.string().optional(),
     PGVECTOR_ENABLED: z
@@ -101,6 +135,36 @@ export const env = createEnv({
       .optional()
       .transform((v) => v === "true")
       .default("true"),
+
+    // Feature Flags
+    ENABLE_WEBSOCKET_PROGRESS: z
+      .string()
+      .optional()
+      .transform((v) => v === "true")
+      .default("true"),
+    ENABLE_USER_PREFERENCES: z
+      .string()
+      .optional()
+      .transform((v) => v === "true")
+      .default("true"),
+    ENABLE_RAG: z
+      .string()
+      .optional()
+      .transform((v) => v === "true")
+      .default("true"),
+    ENABLE_CACHE: z
+      .string()
+      .optional()
+      .transform((v) => v === "true")
+      .default("true"),
+
+    // Port Configuration
+    PORT: z.coerce.number().optional().default(3000),
+
+    // Production Deployment
+    VERCEL_URL: z.string().optional(),
+    DOCKER_REGISTRY: z.string().optional(),
+    K8S_NAMESPACE: z.string().optional(),
   },
 
   /**
@@ -198,21 +262,57 @@ export const env = createEnv({
     MAX_TOKENS_PER_REQUEST: process.env.MAX_TOKENS_PER_REQUEST,
     MAX_COST_PER_DOCUMENT: process.env.MAX_COST_PER_DOCUMENT,
 
+    // Server - Storage
+    STORAGE_PROVIDER: process.env.STORAGE_PROVIDER,
+    UPLOAD_DIR: process.env.UPLOAD_DIR,
+    AWS_REGION: process.env.AWS_REGION,
+    AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID,
+    AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY,
+    AWS_S3_BUCKET: process.env.AWS_S3_BUCKET,
+
     // Server - Email
     RESEND_API_KEY: process.env.RESEND_API_KEY,
     FROM_EMAIL: process.env.FROM_EMAIL,
 
-    // Server - Storage
-    UPLOAD_DIR: process.env.UPLOAD_DIR,
+    // Server - WebSocket
+    SOCKET_PORT: process.env.SOCKET_PORT,
+    SOCKET_PATH: process.env.SOCKET_PATH,
+    SOCKET_ADMIN_PASSWORD: process.env.SOCKET_ADMIN_PASSWORD,
+    WEB_CONCURRENCY: process.env.WEB_CONCURRENCY,
 
     // Server - Rate Limiting
     RATE_LIMIT_MAX: process.env.RATE_LIMIT_MAX,
     RATE_LIMIT_WINDOW: process.env.RATE_LIMIT_WINDOW,
 
+    // Server - Caching
+    CACHE_TTL_DEFAULT: process.env.CACHE_TTL_DEFAULT,
+    CACHE_MAX_SIZE_MB: process.env.CACHE_MAX_SIZE_MB,
+    CACHE_ENABLED: process.env.CACHE_ENABLED,
+
+    // Server - Monitoring
+    ANALYTICS_RETENTION_DAYS: process.env.ANALYTICS_RETENTION_DAYS,
+    COST_ALERT_THRESHOLD: process.env.COST_ALERT_THRESHOLD,
+
+    // Server - Error Recovery
+    MAX_RETRY_ATTEMPTS: process.env.MAX_RETRY_ATTEMPTS,
+    FALLBACK_ENABLED: process.env.FALLBACK_ENABLED,
+
     // Server - Vector Store
     PINECONE_API_KEY: process.env.PINECONE_API_KEY,
     PINECONE_ENVIRONMENT: process.env.PINECONE_ENVIRONMENT,
     PGVECTOR_ENABLED: process.env.PGVECTOR_ENABLED,
+
+    // Server - Feature Flags
+    ENABLE_WEBSOCKET_PROGRESS: process.env.ENABLE_WEBSOCKET_PROGRESS,
+    ENABLE_USER_PREFERENCES: process.env.ENABLE_USER_PREFERENCES,
+    ENABLE_RAG: process.env.ENABLE_RAG,
+    ENABLE_CACHE: process.env.ENABLE_CACHE,
+
+    // Server - Port & Deployment
+    PORT: process.env.PORT,
+    VERCEL_URL: process.env.VERCEL_URL,
+    DOCKER_REGISTRY: process.env.DOCKER_REGISTRY,
+    K8S_NAMESPACE: process.env.K8S_NAMESPACE,
 
     // Client - Application
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,

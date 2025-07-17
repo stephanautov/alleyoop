@@ -26,7 +26,7 @@ export async function generateRouter(name: string, options: RouterOptions) {
     "server",
     "api",
     "routers",
-    `${routerName}.ts`
+    `${routerName}.ts`,
   );
 
   // Check if file exists (only in non-dry-run mode)
@@ -35,7 +35,7 @@ export async function generateRouter(name: string, options: RouterOptions) {
       await fs.access(routerPath);
       throw new Error(`Router ${routerName} already exists at ${routerPath}`);
     } catch (error: any) {
-      if (error.code !== 'ENOENT') throw error;
+      if (error.code !== "ENOENT") throw error;
     }
   }
 
@@ -57,9 +57,11 @@ export async function generateRouter(name: string, options: RouterOptions) {
   const testPath = path.join(
     path.dirname(routerPath),
     "__tests__",
-    `${routerName}.test.ts`
+    `${routerName}.test.ts`,
   );
-  const testContent = await formatCode(generateRouterTest(routerName, modelName, options));
+  const testContent = await formatCode(
+    generateRouterTest(routerName, modelName, options),
+  );
   filesToGenerate.push({ path: testPath, content: testContent });
 
   // Generate types if model is provided
@@ -68,7 +70,7 @@ export async function generateRouter(name: string, options: RouterOptions) {
       process.cwd(),
       "src",
       "types",
-      `${modelName}.ts`
+      `${modelName}.ts`,
     );
     const typesContent = await formatCode(generateTypes(modelName));
     filesToGenerate.push({ path: typesPath, content: typesContent });
@@ -81,16 +83,20 @@ export async function generateRouter(name: string, options: RouterOptions) {
       console.log(`File size: ${file.content.length} bytes`);
 
       // Emit the file content for preview
-      process.stdout.write(JSON.stringify({
-        type: "preview-file",
-        path: file.path,
-        content: file.content
-      }) + "\n");
+      process.stdout.write(
+        JSON.stringify({
+          type: "preview-file",
+          path: file.path,
+          content: file.content,
+        }) + "\n",
+      );
     }
 
     // Also show what would be added to root router
     console.log(`\nWould update: src/server/api/root.ts`);
-    console.log(`Would add import: import { ${routerName}Router } from "./routers/${routerName}";`);
+    console.log(
+      `Would add import: import { ${routerName}Router } from "./routers/${routerName}";`,
+    );
     console.log(`Would add router: ${routerName}: ${routerName}Router,`);
 
     return;
@@ -256,7 +262,11 @@ export const ${routerName}Router = createTRPCRouter({
 });`;
 }
 
-function generateRouterTest(routerName: string, modelName: string, options: RouterOptions): string {
+function generateRouterTest(
+  routerName: string,
+  modelName: string,
+  options: RouterOptions,
+): string {
   const ModelName = pascalCase(modelName);
   const hasModel = !!options.model;
 
@@ -277,7 +287,9 @@ describe("${routerName}Router", () => {
   const ctx = createInnerTRPCContext({ session: mockSession });
   const caller = ${routerName}Router.createCaller(ctx);
 
-  ${hasModel ? `
+  ${
+    hasModel
+      ? `
   describe("CRUD operations", () => {
     it("creates a new ${modelName}", async () => {
       const input = {
@@ -313,7 +325,8 @@ describe("${routerName}Router", () => {
       const result = await caller.delete({ id: "test-id" });
       expect(result.success).toBe(true);
     });
-  });` : `
+  });`
+      : `
   it("returns a greeting", async () => {
     const result = await caller.hello({ text: "world" });
     expect(result.greeting).toBe("Hello world");
@@ -322,7 +335,8 @@ describe("${routerName}Router", () => {
   it("creates an item", async () => {
     const result = await caller.create({ name: "Test Item" });
     expect(result.success).toBe(true);
-  });`}
+  });`
+  }
 });`;
 }
 
@@ -358,7 +372,7 @@ async function updateRootRouter(routerName: string) {
     "src",
     "server",
     "api",
-    "root.ts"
+    "root.ts",
   );
 
   try {
@@ -381,35 +395,40 @@ async function updateRootRouter(routerName: string) {
       content.slice(nextLineIndex + 1);
 
     // Add to router
-    const routerRegex = /export const appRouter = createTRPCRouter\({([^}]*)}\);/s;
+    const routerRegex =
+      /export const appRouter = createTRPCRouter\({([^}]*)}\);/s;
     const match = content.match(routerRegex);
 
     if (match) {
       const existingRouters = match[1];
-      const lines = existingRouters.split('\n').filter(line => line.trim());
+      const lines = existingRouters.split("\n").filter((line) => line.trim());
 
       // Remove trailing comma from last router if exists
       const lastLine = lines[lines.length - 1];
-      if (lastLine && !lastLine.trim().endsWith(',')) {
-        lines[lines.length - 1] = lastLine + ',';
+      if (lastLine && !lastLine.trim().endsWith(",")) {
+        lines[lines.length - 1] = lastLine + ",";
       }
 
       // Add new router
       lines.push(`  ${routerName}: ${routerName}Router,`);
 
-      const updatedRouters = '\n' + lines.join('\n') + '\n';
+      const updatedRouters = "\n" + lines.join("\n") + "\n";
       content = content.replace(
         routerRegex,
-        `export const appRouter = createTRPCRouter({${updatedRouters}});`
+        `export const appRouter = createTRPCRouter({${updatedRouters}});`,
       );
     }
 
     await fs.writeFile(rootRouterPath, await formatCode(content));
     console.log(`✅ Updated root router with ${routerName}Router`);
   } catch (error) {
-    console.warn("Could not update root router automatically. Please add it manually.");
+    console.warn(
+      "Could not update root router automatically. Please add it manually.",
+    );
     console.log(`Add to src/server/api/root.ts:`);
-    console.log(`  import { ${routerName}Router } from "./routers/${routerName}";`);
+    console.log(
+      `  import { ${routerName}Router } from "./routers/${routerName}";`,
+    );
     console.log(`  ${routerName}: ${routerName}Router,`);
   }
 }

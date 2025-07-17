@@ -40,10 +40,12 @@ export async function generateFeature(name: string, options: FeatureOptions) {
       await fs.access(featureRoot);
       const files = await fs.readdir(featureRoot);
       if (files.length > 0) {
-        throw new Error(`Feature directory already exists with ${files.length} files: ${featureRoot}`);
+        throw new Error(
+          `Feature directory already exists with ${files.length} files: ${featureRoot}`,
+        );
       }
     } catch (error: any) {
-      if (error.code !== 'ENOENT') throw error;
+      if (error.code !== "ENOENT") throw error;
     }
   }
 
@@ -55,17 +57,21 @@ export async function generateFeature(name: string, options: FeatureOptions) {
     await generateRouter(camelName, {
       model: modelName,
       crud: true,
-      dryRun: options.dryRun
+      dryRun: options.dryRun,
     });
 
     // Generate API types
     const typesPath = path.join(featureRoot, "types", "index.ts");
-    const typesContent = await formatCode(createApiTypes(featureName, modelName));
+    const typesContent = await formatCode(
+      createApiTypes(featureName, modelName),
+    );
     filesToGenerate.push({ path: typesPath, content: typesContent });
 
     // Generate API hooks
     const hooksPath = path.join(featureRoot, "hooks", "index.ts");
-    const hooksContent = await formatCode(createApiHooks(camelName, featureName));
+    const hooksContent = await formatCode(
+      createApiHooks(camelName, featureName),
+    );
     filesToGenerate.push({ path: hooksPath, content: hooksContent });
   }
 
@@ -77,29 +83,41 @@ export async function generateFeature(name: string, options: FeatureOptions) {
     await generateComponent(`${featureName}List`, {
       type: "component",
       dir: `features/${kebabName}/components`,
-      dryRun: options.dryRun
+      dryRun: options.dryRun,
     });
 
     await generateComponent(`${featureName}Form`, {
       type: "form",
       dir: `features/${kebabName}/components`,
-      dryRun: options.dryRun
+      dryRun: options.dryRun,
     });
 
     await generateComponent(`${featureName}Card`, {
       type: "component",
       dir: `features/${kebabName}/components`,
-      dryRun: options.dryRun
+      dryRun: options.dryRun,
     });
 
     // Generate page files
-    const pages = await createFeaturePages(featureName, camelName, kebabName, options.dryRun);
+    const pages = await createFeaturePages(
+      featureName,
+      camelName,
+      kebabName,
+      options.dryRun,
+    );
     filesToGenerate.push(...pages);
 
     // Create components index
-    const componentsIndexPath = path.join(featureRoot, "components", "index.ts");
+    const componentsIndexPath = path.join(
+      featureRoot,
+      "components",
+      "index.ts",
+    );
     const componentsIndexContent = createComponentsIndex(kebabName);
-    filesToGenerate.push({ path: componentsIndexPath, content: componentsIndexContent });
+    filesToGenerate.push({
+      path: componentsIndexPath,
+      content: componentsIndexContent,
+    });
   }
 
   // 3. Generate tests (delegate to test generator)
@@ -109,24 +127,30 @@ export async function generateFeature(name: string, options: FeatureOptions) {
     if (options.includeApi) {
       await generateTest(`src/server/api/routers/${camelName}.ts`, {
         type: "unit",
-        dryRun: options.dryRun
+        dryRun: options.dryRun,
       });
     }
 
     if (options.includeUi) {
-      await generateTest(`src/features/${kebabName}/components/${kebabName}-list.tsx`, {
-        type: "unit",
-        dryRun: options.dryRun
-      });
+      await generateTest(
+        `src/features/${kebabName}/components/${kebabName}-list.tsx`,
+        {
+          type: "unit",
+          dryRun: options.dryRun,
+        },
+      );
 
-      await generateTest(`src/features/${kebabName}/components/${kebabName}-form.tsx`, {
-        type: "unit",
-        dryRun: options.dryRun
-      });
+      await generateTest(
+        `src/features/${kebabName}/components/${kebabName}-form.tsx`,
+        {
+          type: "unit",
+          dryRun: options.dryRun,
+        },
+      );
 
       await generateTest(`src/app/${kebabName}/page.tsx`, {
         type: "integration",
-        dryRun: options.dryRun
+        dryRun: options.dryRun,
       });
     }
   }
@@ -134,12 +158,22 @@ export async function generateFeature(name: string, options: FeatureOptions) {
   // 4. Create feature-specific files
   // Feature index file
   const indexPath = path.join(featureRoot, "index.ts");
-  const indexContent = createFeatureIndex(featureName, camelName, kebabName, options);
+  const indexContent = createFeatureIndex(
+    featureName,
+    camelName,
+    kebabName,
+    options,
+  );
   filesToGenerate.push({ path: indexPath, content: indexContent });
 
   // Feature README
   const readmePath = path.join(featureRoot, "README.md");
-  const readmeContent = createFeatureReadme(featureName, camelName, kebabName, options);
+  const readmeContent = createFeatureReadme(
+    featureName,
+    camelName,
+    kebabName,
+    options,
+  );
   filesToGenerate.push({ path: readmePath, content: readmeContent });
 
   // Utils index (empty placeholder)
@@ -150,7 +184,9 @@ export async function generateFeature(name: string, options: FeatureOptions) {
   // Handle dry-run mode
   if (options.dryRun) {
     console.log(`\n📁 Would create feature directory: ${featureRoot}`);
-    console.log(`Would create subdirectories: components, hooks, types, utils, __tests__, pages`);
+    console.log(
+      `Would create subdirectories: components, hooks, types, utils, __tests__, pages`,
+    );
 
     // Output files that this generator creates directly
     for (const file of filesToGenerate) {
@@ -158,11 +194,13 @@ export async function generateFeature(name: string, options: FeatureOptions) {
       console.log(`File size: ${file.content.length} bytes`);
 
       // Emit preview data
-      process.stdout.write(JSON.stringify({
-        type: "preview-file",
-        path: file.path,
-        content: file.content
-      }) + "\n");
+      process.stdout.write(
+        JSON.stringify({
+          type: "preview-file",
+          path: file.path,
+          content: file.content,
+        }) + "\n",
+      );
     }
 
     console.log(`\n📝 Next steps after generation:`);
@@ -207,7 +245,7 @@ async function createFeatureStructure(featureRoot: string) {
     "types",
     "utils",
     "__tests__",
-    "pages"
+    "pages",
   ];
 
   for (const dir of directories) {
@@ -326,14 +364,15 @@ async function createFeaturePages(
   featureName: string,
   camelName: string,
   kebabName: string,
-  dryRun: boolean
+  dryRun: boolean,
 ): Promise<FileToGenerate[]> {
   const pages: FileToGenerate[] = [];
   const appPagesDir = path.join(process.cwd(), "src", "app", kebabName);
 
   // List page
   const listPagePath = path.join(appPagesDir, "page.tsx");
-  const listPageContent = await formatCode(`import { redirect } from "next/navigation";
+  const listPageContent =
+    await formatCode(`import { redirect } from "next/navigation";
 import { getServerAuthSession } from "~/server/auth-compat";
 import { ${featureName}List } from "~/features/${kebabName}/components/${kebabName}-list";
 import { Button } from "~/components/ui/button";
@@ -372,7 +411,8 @@ export default async function ${featureName}Page() {
 
   // New/Create page
   const newPagePath = path.join(appPagesDir, "new", "page.tsx");
-  const newPageContent = await formatCode(`import { redirect } from "next/navigation";
+  const newPageContent =
+    await formatCode(`import { redirect } from "next/navigation";
 import { getServerAuthSession } from "~/server/auth-compat";
 import { ${featureName}Form } from "~/features/${kebabName}/components/${kebabName}-form";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
@@ -413,7 +453,8 @@ export default async function New${featureName}Page() {
 
   // Detail page
   const detailPagePath = path.join(appPagesDir, "[id]", "page.tsx");
-  const detailPageContent = await formatCode(`import { notFound, redirect } from "next/navigation";
+  const detailPageContent =
+    await formatCode(`import { notFound, redirect } from "next/navigation";
 import { getServerAuthSession } from "~/server/auth-compat";
 import { api } from "~/trpc/server";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
@@ -475,7 +516,8 @@ export default async function ${featureName}DetailPage({ params }: PageProps) {
 
   // Edit page
   const editPagePath = path.join(appPagesDir, "[id]", "edit", "page.tsx");
-  const editPageContent = await formatCode(`import { notFound, redirect } from "next/navigation";
+  const editPageContent =
+    await formatCode(`import { notFound, redirect } from "next/navigation";
 import { getServerAuthSession } from "~/server/auth-compat";
 import { api } from "~/trpc/server";
 import { ${featureName}Form } from "~/features/${kebabName}/components/${kebabName}-form";
@@ -535,7 +577,7 @@ function createFeatureIndex(
   featureName: string,
   camelName: string,
   kebabName: string,
-  options: FeatureOptions
+  options: FeatureOptions,
 ): string {
   const exports: string[] = [];
 
@@ -566,7 +608,7 @@ function createFeatureReadme(
   featureName: string,
   camelName: string,
   kebabName: string,
-  options: FeatureOptions
+  options: FeatureOptions,
 ): string {
   return `# ${featureName} Feature
 
@@ -615,11 +657,15 @@ const createMutation = useCreate${featureName}();
 
 ## API Endpoints
 
-${options.includeApi ? `- \`${camelName}.create\` - Create a new item
+${
+  options.includeApi
+    ? `- \`${camelName}.create\` - Create a new item
 - \`${camelName}.list\` - List all items
 - \`${camelName}.getById\` - Get single item
 - \`${camelName}.update\` - Update an item
-- \`${camelName}.delete\` - Delete an item` : 'No API endpoints generated for this feature.'}
+- \`${camelName}.delete\` - Delete an item`
+    : "No API endpoints generated for this feature."
+}
 
 ## Development
 

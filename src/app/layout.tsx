@@ -6,6 +6,8 @@ import { TRPCReactProvider } from "~/trpc/react";
 import { Toaster } from "~/components/ui/sonner";
 import { ThemeProvider } from "~/components/theme-provider";
 import type { Metadata } from "next";
+import { SocketProvider } from "~/components/providers/socket-provider";
+
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-sans",
@@ -32,8 +34,10 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <TRPCReactProvider>
-            {children}
-            <Toaster richColors closeButton />
+            <SocketProvider>
+              {children}
+              <Toaster richColors closeButton />
+            </SocketProvider>
           </TRPCReactProvider>
         </ThemeProvider>
       </body>

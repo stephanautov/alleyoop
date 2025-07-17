@@ -33,7 +33,7 @@ export function formatBytes(bytes: number, decimals = 2): string {
 export function formatCurrency(
   amount: number,
   currency = "USD",
-  locale = "en-US"
+  locale = "en-US",
 ): string {
   return new Intl.NumberFormat(locale, {
     style: "currency",
@@ -46,11 +46,12 @@ export function formatCurrency(
  */
 export function formatDate(
   date: Date | string | number,
-  formatStr = "PPP"
+  formatStr = "PPP",
 ): string {
-  const dateObj = typeof date === "string" || typeof date === "number"
-    ? new Date(date)
-    : date;
+  const dateObj =
+    typeof date === "string" || typeof date === "number"
+      ? new Date(date)
+      : date;
 
   if (!isValid(dateObj)) {
     return "Invalid date";
@@ -63,9 +64,10 @@ export function formatDate(
  * Format relative time (e.g., "2 hours ago")
  */
 export function formatTimeAgo(date: Date | string | number): string {
-  const dateObj = typeof date === "string" || typeof date === "number"
-    ? new Date(date)
-    : date;
+  const dateObj =
+    typeof date === "string" || typeof date === "number"
+      ? new Date(date)
+      : date;
 
   if (!isValid(dateObj)) {
     return "Invalid date";
@@ -99,7 +101,7 @@ export function getInitials(name: string): string {
  */
 export function debounce<T extends (...args: any[]) => any>(
   func: T,
-  wait: number
+  wait: number,
 ): (...args: Parameters<T>) => void {
   let timeout: NodeJS.Timeout;
 
@@ -127,7 +129,9 @@ export function sleep(ms: number): Promise<void> {
 export function generateId(prefix?: string): string {
   const timestamp = Date.now().toString(36);
   const randomStr = Math.random().toString(36).substring(2, 9);
-  return prefix ? `${prefix}_${timestamp}${randomStr}` : `${timestamp}${randomStr}`;
+  return prefix
+    ? `${prefix}_${timestamp}${randomStr}`
+    : `${timestamp}${randomStr}`;
 }
 
 /**
@@ -160,14 +164,17 @@ export function isServer(): boolean {
  */
 export function groupBy<T, K extends keyof T>(
   array: T[],
-  key: K
+  key: K,
 ): Record<string, T[]> {
-  return array.reduce((result, item) => {
-    const group = String(item[key]);
-    if (!result[group]) result[group] = [];
-    result[group].push(item);
-    return result;
-  }, {} as Record<string, T[]>);
+  return array.reduce(
+    (result, item) => {
+      const group = String(item[key]);
+      if (!result[group]) result[group] = [];
+      result[group].push(item);
+      return result;
+    },
+    {} as Record<string, T[]>,
+  );
 }
 
 /**
@@ -196,7 +203,7 @@ export async function retry<T>(
     retries?: number;
     delay?: number;
     onRetry?: (error: Error, attempt: number) => void;
-  } = {}
+  } = {},
 ): Promise<T> {
   const { retries = 3, delay = 1000, onRetry } = options;
 
@@ -251,7 +258,10 @@ export function isValidEmail(email: string): boolean {
 /**
  * Calculate reading time for text
  */
-export function calculateReadingTime(text: string, wordsPerMinute = 200): number {
+export function calculateReadingTime(
+  text: string,
+  wordsPerMinute = 200,
+): number {
   const words = text.trim().split(/\s+/).length;
   return Math.ceil(words / wordsPerMinute);
 }
