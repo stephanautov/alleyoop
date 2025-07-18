@@ -52,10 +52,22 @@ export const grantProposalSchema = baseDocumentSchema.extend({
         "budget",
         "organization_info",
         "conclusion",
-      ]),
+      ])
     )
     .default(["executive_summary", "statement_of_need", "project_description"]),
   focusArea: z.string().min(1).default(""),
+
+  // Additional fields for comprehensive grant proposals
+  grantType: z
+    .enum(["federal", "state", "foundation", "corporate", "community", "other"])
+    .default("foundation"),
+  funderType: z
+    .enum(["government", "foundation", "corporate", "community", "other"])
+    .default("foundation"),
+  funderPriorities: z.array(z.string()).default([]),
+  projectSummary: z.string().optional().default(""),
+  targetPopulation: z.string().optional().default(""),
+  geographicScope: z.string().optional().default(""),
 });
 
 export const grantProposalFieldConfig = {
@@ -124,5 +136,49 @@ export const grantProposalFieldConfig = {
     label: "Primary Focus Area",
     placeholder: "e.g., Education, Healthcare, Environment",
     description: "The main area your project addresses",
+  },
+
+  // Additional field configurations
+  grantType: {
+    label: "Grant Type",
+    options: [
+      { value: "federal", label: "Federal Grant" },
+      { value: "state", label: "State Grant" },
+      { value: "foundation", label: "Foundation Grant" },
+      { value: "corporate", label: "Corporate Grant" },
+      { value: "community", label: "Community Grant" },
+      { value: "other", label: "Other" },
+    ],
+  },
+  funderType: {
+    label: "Funder Type",
+    options: [
+      { value: "government", label: "Government" },
+      { value: "foundation", label: "Foundation" },
+      { value: "corporate", label: "Corporation" },
+      { value: "community", label: "Community Organization" },
+      { value: "other", label: "Other" },
+    ],
+  },
+  funderPriorities: {
+    label: "Funder Priorities",
+    description: "Add key priorities or focus areas of the funder",
+    placeholder: "Enter a priority and press Add",
+  },
+  projectSummary: {
+    label: "Project Summary",
+    placeholder: "Brief overview of your project (2-3 sentences)",
+    type: "textarea",
+    rows: 3,
+  },
+  targetPopulation: {
+    label: "Target Population",
+    placeholder: "e.g., Low-income families, Youth ages 12-18",
+    description: "Who will benefit from this project?",
+  },
+  geographicScope: {
+    label: "Geographic Scope",
+    placeholder: "e.g., San Francisco Bay Area, Statewide, National",
+    description: "Where will the project be implemented?",
   },
 };

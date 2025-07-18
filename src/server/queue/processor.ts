@@ -63,6 +63,10 @@ const documentWorker = new Worker(
       // Get document configuration
       const config = getDocumentConfig(jobData.type);
 
+      if (!config) {
+        throw new Error(`No configuration found for document type: ${jobData.type}`);
+      }
+
       // Generate outline
       await job.updateProgress(PROGRESS_STAGES.GENERATING_OUTLINE);
       const outline = await generateOutline(jobData.type, jobData.input);
@@ -86,7 +90,7 @@ const documentWorker = new Worker(
             PROGRESS_STAGES.GENERATING_OUTLINE +
             (PROGRESS_STAGES.GENERATING_SECTIONS -
               PROGRESS_STAGES.GENERATING_OUTLINE) *
-              progress;
+            progress;
           await job.updateProgress(Math.round(sectionProgress));
         },
       );

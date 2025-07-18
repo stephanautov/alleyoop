@@ -1,7 +1,7 @@
 // File: src/server/services/rag/ingestion/metadata.ts
 // ============================================
 
-import { DocumentMetadata } from "../types";
+import type { DocumentMetadata } from "../types";
 import pdfParse from "pdf-parse";
 
 export class MetadataExtractor {

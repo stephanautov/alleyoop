@@ -24,7 +24,7 @@ interface GeneratorMetrics {
   generator: string;
   name: string;
   preview: boolean;
-  failed?: boolean;
+  success?: boolean;
 }
 
 interface ValidationResult {
@@ -111,7 +111,8 @@ async function validateGeneration(
 
     case "component":
       // Add component-specific validation
-      if (name[0] !== name[0].toUpperCase()) {
+      const firstChar = name.charAt(0);
+      if (firstChar !== firstChar.toUpperCase()) {
         result.warnings.push(
           "Component names should start with uppercase letter",
         );
@@ -134,8 +135,9 @@ async function trackGeneratorMetrics(metrics: GeneratorMetrics): Promise<void> {
         userId: metrics.userId,
         generator: metrics.generator,
         name: metrics.name,
+        duration: 0,
         preview: metrics.preview,
-        failed: metrics.failed || false,
+        success: metrics.success || true,
         createdAt: new Date(),
       },
     });
@@ -312,7 +314,7 @@ export const enhancedGeneratorsRouter = createTRPCRouter({
           generator: "router",
           name: input.name,
           preview: input.preview,
-          failed: true,
+          success: false,
         });
 
         throw new TRPCError({
@@ -398,7 +400,7 @@ export const enhancedGeneratorsRouter = createTRPCRouter({
       select: {
         generator: true,
         preview: true,
-        failed: true,
+        success: true,
         createdAt: true,
       },
     });
@@ -466,9 +468,15 @@ export async function recoverFromGeneratorError(
   await db.generatorError.create({
     data: {
       sessionId,
+      generator: "router",
+      user: {
+        connect: {
+          id: sessionId,
+        },
+      },
       error: error.message,
       stack: error.stack || "",
-      timestamp: new Date(),
+      createdAt: new Date(),
     },
   });
 }

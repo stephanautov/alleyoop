@@ -5,7 +5,7 @@ import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import pdfParse from "pdf-parse";
 import mammoth from "mammoth";
 import { decode } from "html-entities";
-import { TextChunk, IngestionOptions } from "../types";
+import type { TextChunk, IngestionOptions } from "../types";
 
 export class DocumentChunker {
     private textSplitter: RecursiveCharacterTextSplitter;

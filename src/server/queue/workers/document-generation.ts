@@ -162,10 +162,8 @@ export const documentGenerationWorker = new Worker<DocumentJobData>(
         where: { id: documentId },
         data: {
           status: DocumentStatus.FAILED,
-          metadata: {
-            error: error instanceof Error ? error.message : 'Unknown error',
-            failedAt: new Date(),
-          },
+          error: error instanceof Error ? error.message : 'Unknown error',
+          failedAt: new Date(),
         },
       });
 

@@ -255,7 +255,8 @@ function renderField<T extends Record<string, any>>(
     fieldSchema instanceof z.ZodOptional ||
     fieldSchema instanceof z.ZodDefault
   ) {
-    innerSchema = fieldSchema._def.innerType || fieldSchema._def.schema;
+    const def: any = (fieldSchema as any)._def;
+    innerSchema = def.innerType ?? def.schema;
   }
 
   // Array types
@@ -409,9 +410,9 @@ export function FormGenerator<T extends z.ZodType<any, any>>({
   const schemaDefaults =
     schema instanceof z.ZodObject
       ? Object.entries(schema.shape).reduce((acc, [key, value]) => {
-          acc[key] = getDefaultValue(value as z.ZodTypeAny);
-          return acc;
-        }, {} as any)
+        acc[key] = getDefaultValue(value as z.ZodTypeAny);
+        return acc;
+      }, {} as any)
       : {};
 
   const form = useForm<z.infer<T>>({

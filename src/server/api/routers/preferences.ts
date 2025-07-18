@@ -12,7 +12,7 @@ const providerModelSchema = z.object({
     model: z.string(),
 });
 
-const providerModelsSchema = z.record(z.nativeEnum(DocumentType), providerModelSchema).partial();
+const providerModelsSchema = z.record(z.nativeEnum(DocumentType), providerModelSchema);
 
 const userPreferencesSchema = z.object({
     defaultProvider: z.enum(['openai', 'anthropic', 'gemini', 'perplexity', 'llama']).optional(),
@@ -68,12 +68,12 @@ export const preferencesRouter = createTRPCRouter({
             const updated = await ctx.db.userPreferences.upsert({
                 where: { userId: ctx.session.user.id },
                 update: {
-                    ...input,
+                    ...(input as any),
                     providerModels: input.providerModels ? JSON.stringify(input.providerModels) : undefined,
                 },
                 create: {
                     userId: ctx.session.user.id,
-                    ...input,
+                    ...(input as any),
                     providerModels: input.providerModels ? JSON.stringify(input.providerModels) : {},
                 },
             });

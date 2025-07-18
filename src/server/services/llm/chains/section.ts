@@ -1,9 +1,9 @@
 // src/server/services/llm/chains/section.ts
 import { DocumentType } from '@prisma/client';
-import { LLMProvider } from '../base';
-import { ProviderName } from '../index';
-import { DocumentOutline } from './outline';
-import { documentTypePrompts } from '../prompts';
+import type { LLMProvider } from '../base';
+import type { ProviderName } from '../index';
+import type { DocumentOutline } from './outline';
+import { documentPrompts } from '../prompts';
 import { TextSplitter } from '../utils/splitter';
 
 export interface SectionContext {
@@ -36,14 +36,14 @@ export class SectionChain {
 
   async generate(context: SectionContext): Promise<SectionResult> {
     // Get document-specific prompt builder
-    const promptBuilder = documentTypePrompts[context.documentType];
+    const promptBuilder = documentPrompts[context.documentType];
     if (!promptBuilder?.section) {
       throw new Error(`No section prompt builder found for document type: ${context.documentType}`);
     }
 
     // Build context-aware prompt
     const prompt = this.buildSectionPrompt(context, promptBuilder);
-    
+
     // Calculate optimal token allocation
     const maxTokens = this.calculateMaxTokens(context.targetWords);
 
@@ -59,7 +59,7 @@ export class SectionChain {
 
     // Validate section meets requirements
     const validation = this.validateSection(processed, context);
-    
+
     if (!validation.isValid) {
       // Attempt to fix common issues
       processed.content = await this.attemptAutoFix(processed, validation, context);
@@ -100,18 +100,18 @@ export class SectionChain {
   private enhanceForProvider(prompt: string, context: SectionContext): string {
     const enhancements: Record<ProviderName, (p: string, c: SectionContext) => string> = {
       openai: (p, c) => p + '\n\nUse clear structure with smooth transitions between ideas.',
-      
+
       anthropic: (p, c) => p + '\n\nFocus on creating nuanced, thoughtful content that demonstrates deep understanding.',
-      
+
       gemini: (p, c) => p + '\n\nProvide comprehensive coverage with specific examples and detailed explanations.',
-      
+
       perplexity: (p, c) => {
         if (c.documentType === DocumentType.CASE_SUMMARY || c.documentType === DocumentType.GRANT_PROPOSAL) {
           return p + '\n\nInclude relevant citations and references where appropriate.';
         }
         return p + '\n\nIncorporate current information and best practices.';
       },
-      
+
       llama: (p, c) => p + '\n\nWrite clearly and concisely while meeting the word count target.',
     };
 
@@ -155,7 +155,7 @@ export class SectionChain {
 
     for (const subsection of subsections) {
       const subPrompt = `${params.prompt}\n\nFocus specifically on: ${subsection.focus}`;
-      
+
       const response = await this.provider.generateCompletion({
         prompt: subPrompt,
         model: this.model,
@@ -204,12 +204,12 @@ export class SectionChain {
   private summarizePreviousSections(previousSections: Record<string, string>): string {
     // Create a brief summary of key points from previous sections
     const summaries: string[] = [];
-    
+
     for (const [sectionId, content] of Object.entries(previousSections)) {
       // Extract first and last sentences as summary
       const sentences = content.match(/[^.!?]+[.!?]+/g) || [];
       if (sentences.length > 0) {
-        const summary = sentences.length > 3 
+        const summary = sentences.length > 3
           ? `${sentences[0]} [...] ${sentences[sentences.length - 1]}`
           : sentences.join(' ');
         summaries.push(`${sectionId}: ${summary.trim()}`);
@@ -249,16 +249,16 @@ export class SectionChain {
   private fixFormatting(content: string): string {
     // Fix double spaces
     content = content.replace(/  +/g, ' ');
-    
+
     // Fix paragraph spacing
     content = content.replace(/\n{3,}/g, '\n\n');
-    
+
     // Ensure sentences end with proper punctuation
     content = content.replace(/([a-zA-Z])\n/g, '$1.\n');
-    
+
     // Fix quote formatting
     content = content.replace(/``/g, '"').replace(/''/g, '"');
-    
+
     return content;
   }
 
@@ -280,7 +280,7 @@ export class SectionChain {
       // Check if key point is mentioned (fuzzy matching)
       const keywords = point.toLowerCase().split(/\s+/).filter(w => w.length > 3);
       const matches = keywords.filter(keyword => contentLower.includes(keyword));
-      
+
       if (matches.length >= keywords.length * 0.5) {
         covered.push(point);
       }
@@ -295,7 +295,7 @@ export class SectionChain {
     // Check word count
     const wordCount = this.countWords(content);
     const targetWords = context.targetWords;
-    
+
     if (wordCount < targetWords * 0.8) {
       suggestions.push(`Section is ${targetWords - wordCount} words short of target`);
     } else if (wordCount > targetWords * 1.3) {
@@ -306,7 +306,7 @@ export class SectionChain {
     const expectedPoints = context.sectionDetails.keyPoints || [];
     const covered = this.extractKeyPoints(content, expectedPoints);
     const missing = expectedPoints.filter(p => !covered.includes(p));
-    
+
     if (missing.length > 0) {
       suggestions.push(`Missing key points: ${missing.join(', ')}`);
     }
@@ -322,11 +322,11 @@ export class SectionChain {
   private hasSignificantOverlap(content: string, previousSections: Record<string, string>): boolean {
     // Simple check for repeated phrases
     const currentPhrases = this.extractPhrases(content);
-    
+
     for (const prevContent of Object.values(previousSections)) {
       const prevPhrases = this.extractPhrases(prevContent);
       const overlap = currentPhrases.filter(phrase => prevPhrases.includes(phrase));
-      
+
       if (overlap.length > currentPhrases.length * 0.2) {
         return true;
       }
@@ -338,11 +338,11 @@ export class SectionChain {
   private extractPhrases(text: string, phraseLength: number = 5): string[] {
     const words = text.toLowerCase().split(/\s+/);
     const phrases: string[] = [];
-    
+
     for (let i = 0; i <= words.length - phraseLength; i++) {
       phrases.push(words.slice(i, i + phraseLength).join(' '));
     }
-    
+
     return phrases;
   }
 
@@ -360,7 +360,7 @@ export class SectionChain {
     // Check key points coverage
     const expectedPoints = context.sectionDetails.keyPoints || [];
     const coverageRatio = result.keyPointsCovered.length / Math.max(expectedPoints.length, 1);
-    
+
     if (coverageRatio < 0.6) {
       issues.push('Insufficient coverage of key points');
     }
@@ -402,7 +402,7 @@ export class SectionChain {
       if (issue.includes('shorter than target')) {
         // Add elaboration prompt
         const elaborationPrompt = `Expand the following content to approximately ${context.targetWords} words by adding more detail and examples:\n\n${content}`;
-        
+
         const response = await this.provider.generateCompletion({
           prompt: elaborationPrompt,
           model: this.model,
@@ -451,10 +451,10 @@ export class SectionChain {
   private calculateMaxTokens(targetWords: number): number {
     // Rough conversion: 1 word ≈ 1.3 tokens
     const targetTokens = Math.ceil(targetWords * 1.3);
-    
+
     // Add buffer for better results
     const withBuffer = targetTokens * 1.2;
-    
+
     // Respect model limits
     const modelLimits: Record<string, number> = {
       'gpt-4-turbo': 4096,
@@ -470,7 +470,7 @@ export class SectionChain {
   private supportsLongGeneration(): boolean {
     // Some providers/models handle long content better
     return ['gemini', 'anthropic'].includes(this.providerName) ||
-           this.model.includes('gemini-1.5') ||
-           this.model.includes('claude-3-opus');
+      this.model.includes('gemini-1.5') ||
+      this.model.includes('claude-3-opus');
   }
 }

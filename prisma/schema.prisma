@@ -70,7 +70,8 @@ model User {
 model UserPreferences {
   id                String  @id @default(cuid())
   userId            String  @unique
-  defaultProvider   String? @default("openai")
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  defaultProvider   String  @default("openai")
   providerModels    Json    @default("{}")
   temperature       Float   @default(0.7)
   maxTokensOverride Int?
@@ -90,7 +91,7 @@ model UserPreferences {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
 }
 
 model VerificationToken {
@@ -117,6 +118,10 @@ model Document {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   completedAt DateTime?
+
+  // Error Tracking
+  error     String?      
+  failedAt  DateTime?    
 
   // LLM-specific fields
   provider    String? // "openai" | "anthropic"
@@ -236,8 +241,10 @@ model GeneratorTemplate {
 model GeneratorMetrics {
   id             String   @id @default(cuid())
   generator      String
+  name           String?      
   userId         String
   success        Boolean  @default(true)
+  preview        Boolean      @default(false)  
   duration       Int
   filesGenerated Int      @default(0)
   error          String?
@@ -251,6 +258,7 @@ model GeneratorMetrics {
 
 model GeneratorError {
   id        String   @id @default(cuid())
+  sessionId       String?
   generator String
   userId    String
   error     String   @db.Text
@@ -262,6 +270,7 @@ model GeneratorError {
 
   @@index([userId])
   @@index([generator])
+  @@index([sessionId])
 }
 
 model LLMCall {

@@ -7,37 +7,37 @@ import { businessPlanSchema } from '~/config/schemas/business-plan';
 type BusinessPlanInput = z.infer<typeof businessPlanSchema>;
 
 export const businessPlanPrompts = {
-    // System prompts optimized per provider
-    systemPrompts: {
-        openai: `You are an expert business strategist and entrepreneur with decades of experience creating successful business plans. You excel at market analysis, financial projections, and compelling business narratives that attract investors.`,
+  // System prompts optimized per provider
+  systemPrompts: {
+    openai: `You are an expert business strategist and entrepreneur with decades of experience creating successful business plans. You excel at market analysis, financial projections, and compelling business narratives that attract investors.`,
 
-        anthropic: `You are a thoughtful business advisor who creates comprehensive, realistic business plans. You balance optimism with pragmatism, identifying both opportunities and challenges while crafting strategies for sustainable growth.`,
+    anthropic: `You are a thoughtful business advisor who creates comprehensive, realistic business plans. You balance optimism with pragmatism, identifying both opportunities and challenges while crafting strategies for sustainable growth.`,
 
-        gemini: `You are a versatile business consultant who excels at creating detailed, data-driven business plans. You combine thorough market research with creative strategies and solid financial planning.`,
+    gemini: `You are a versatile business consultant who excels at creating detailed, data-driven business plans. You combine thorough market research with creative strategies and solid financial planning.`,
 
-        perplexity: `You are a research-focused business analyst who creates well-sourced, market-validated business plans. You excel at finding industry data, competitor analysis, and market trends to support strategic decisions.`,
+    perplexity: `You are a research-focused business analyst who creates well-sourced, market-validated business plans. You excel at finding industry data, competitor analysis, and market trends to support strategic decisions.`,
 
-        llama: `You are a practical business planner who creates clear, actionable business plans. You focus on feasibility and execution, ensuring every strategy is implementable and measurable.`
-    },
+    llama: `You are a practical business planner who creates clear, actionable business plans. You focus on feasibility and execution, ensuring every strategy is implementable and measurable.`
+  },
 
-    // Outline generation prompt
-    outline: (input: BusinessPlanInput, provider: string) => {
-        const businessType = input.businessType;
-        const planPurpose = input.planPurpose;
-        const stage = input.businessStage;
+  // Outline generation prompt
+  outline: (input: BusinessPlanInput, provider: string) => {
+    const businessType = input.businessType;
+    const planPurpose = input.planPurpose;
+    const stage = input.businessStage;
 
-        let providerSpecific = '';
+    let providerSpecific = '';
 
-        if (provider === 'perplexity') {
-            providerSpecific = `\n\nIMPORTANT: Include market research sources and competitor data for validation.`;
-        } else if (provider === 'openai' && planPurpose === 'investor_pitch') {
-            providerSpecific = `\n\nFocus on ROI potential, scalability, and exit strategies that appeal to investors.`;
-        }
+    if (provider === 'perplexity') {
+      providerSpecific = `\n\nIMPORTANT: Include market research sources and competitor data for validation.`;
+    } else if (provider === 'openai' && planPurpose === 'investor_pitch') {
+      providerSpecific = `\n\nFocus on ROI potential, scalability, and exit strategies that appeal to investors.`;
+    }
 
-        return `Create a detailed outline for a business plan.
+    return `Create a detailed outline for a business plan.
 
 Business Details:
-- Business Name: ${input.businessName}
+- Business Name: ${input.business.name}
 - Type: ${businessType}
 - Industry: ${input.industry}
 - Stage: ${stage}
@@ -99,28 +99,28 @@ Generate a JSON outline with the following structure:
     }
   }
 }`;
-    },
+  },
 
-    // Section generation prompt
-    section: (
-        sectionId: string,
-        sectionOutline: any,
-        fullOutline: any,
-        originalInput: BusinessPlanInput,
-        previousSections?: Record<string, string>
-    ) => {
-        const stage = originalInput.businessStage;
-        const purpose = originalInput.planPurpose;
+  // Section generation prompt
+  section: (
+    sectionId: string,
+    sectionOutline: any,
+    fullOutline: any,
+    originalInput: BusinessPlanInput,
+    previousSections?: Record<string, string>
+  ) => {
+    const stage = originalInput.businessStage;
+    const purpose = originalInput.planPurpose;
 
-        let contextPrompt = '';
-        if (previousSections && Object.keys(previousSections).length > 0) {
-            contextPrompt = `\n\nPrevious sections covered: ${Object.keys(previousSections).join(', ')}. 
+    let contextPrompt = '';
+    if (previousSections && Object.keys(previousSections).length > 0) {
+      contextPrompt = `\n\nPrevious sections covered: ${Object.keys(previousSections).join(', ')}. 
 Maintain consistency with established facts and projections.`;
-        }
+    }
 
-        // Special handling for financial sections
-        if (sectionId === 'financial_projections') {
-            return `Write the Financial Projections section of the business plan.
+    // Special handling for financial sections
+    if (sectionId === 'financial_projections') {
+      return `Write the Financial Projections section of the business plan.
 
 Business: ${originalInput.businessName} (${stage} stage)
 Industry: ${originalInput.industry}
@@ -135,9 +135,9 @@ Create realistic financial projections for a ${originalInput.planHorizon} period
 
 Use tables where appropriate. Be ${stage === 'startup' ? 'optimistic but realistic' : 'based on historical performance'}.
 Clearly state all assumptions.`;
-        }
+    }
 
-        return `Write the "${sectionOutline.title}" section of the business plan.
+    return `Write the "${sectionOutline.title}" section of the business plan.
 
 Section Details:
 ${JSON.stringify(sectionOutline, null, 2)}
@@ -155,11 +155,11 @@ Writing Requirements:
 5. ${stage === 'startup' ? 'Address potential risks and mitigation strategies' : 'Highlight proven success metrics'}
 
 Write with confidence while maintaining credibility.`;
-    },
+  },
 
-    // Refinement prompt
-    refinement: (content: string, input: BusinessPlanInput) => {
-        return `Review and refine this business plan for ${input.businessName}.
+  // Refinement prompt
+  refinement: (content: string, input: BusinessPlanInput) => {
+    return `Review and refine this business plan for ${input.business.name}.
 
 Current content:
 ${content}
@@ -174,5 +174,5 @@ Refinement goals:
 7. Ensure the executive summary captures all key points
 
 Polish the plan to be professional, compelling, and actionable.`;
-    }
+  }
 };

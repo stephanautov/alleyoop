@@ -1,6 +1,6 @@
 //src/lib/export/index.ts
 
-import { type Document as PrismaDocument, ExportFormat } from "@prisma/client";
+import { type Document as PrismaDocument, ExportFormat, DocumentType } from "@prisma/client";
 import { DocxExporter } from "./docx-exporter";
 import { MarkdownExporter } from "./markdown-exporter";
 import { PDFExporter } from "./pdf-exporter";
@@ -104,11 +104,13 @@ export async function exportDocument(
 
   // Get document configuration
   const config = getDocumentConfig(document.type);
+  if (!config) {
+    throw new Error(`Unknown document type: ${document.type}`);
+  }
 
-  // Validate format is supported for this document type
-  if (
-    !(config.exportFormats as readonly string[]).includes(format.toLowerCase())
-  ) {
+  // Check if config has exportFormats property and validate
+  const supportedFormats = (config as any).exportFormats as readonly string[] | undefined;
+  if (supportedFormats && !supportedFormats.includes(format.toLowerCase())) {
     throw new Error(
       `Export format ${format} is not supported for ${config.name} documents`,
     );
@@ -216,12 +218,23 @@ export async function exportMultipleDocuments(
  * Get available export formats for a document type
  */
 export function getAvailableExportFormats(
-  documentType: string,
+  documentType: DocumentType
 ): ExportFormat[] {
-  const config = getDocumentConfig(documentType as any);
-  return config.exportFormats
-    .map((format) => format.toUpperCase() as ExportFormat)
-    .filter((format) => exporterRegistry.isSupported(format));
+  const config = getDocumentConfig(documentType);
+  if (!config) {
+    return [];
+  }
+
+  // Check if config has exportFormats
+  const exportFormats = (config as any).exportFormats as readonly string[] | undefined;
+  if (!exportFormats) {
+    // Default to all formats if not specified
+    return exporterRegistry.getSupportedFormats();
+  }
+
+  return exportFormats
+    .map((format: string) => format.toUpperCase() as ExportFormat)
+    .filter((format: ExportFormat) => exporterRegistry.isSupported(format));
 }
 
 /**

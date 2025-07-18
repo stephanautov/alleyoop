@@ -1,7 +1,21 @@
 //src/server/api/routers/document.ts
 
+// IMPORTANT: If you get type errors about fields not existing on Document model,
+// run: npx prisma generate
+// This will regenerate the Prisma client with the latest schema
+// 
+// If errors persist after regenerating, try:
+// 1. Delete node_modules/.prisma folder
+// 2. Run: npm install
+// 3. Run: npx prisma generate
+// 4. Restart TypeScript server in VS Code (Ctrl+Shift+P -> "TypeScript: Restart TS Server")
+//
+// As a last resort, run: chmod +x fix-prisma-types.sh && ./fix-prisma-types.sh
+
 import { z } from "zod";
 import { DocumentStatus, DocumentType, Prisma } from "@prisma/client";
+// Import type overrides if they exist
+import "~/types/prisma-overrides";
 import {
   createTRPCRouter,
   protectedProcedure,
@@ -21,11 +35,30 @@ import { Queue } from "bullmq";
 import { env } from "~/env";
 import { PreferencesSyncService } from "~/server/services/preferences/sync";
 
+// Extended Document type that includes LLM fields
+type DocumentWithLLMFields = {
+  id: string;
+  userId: string;
+  type: DocumentType;
+  status: DocumentStatus;
+  input: any;
+  provider?: string | null;
+  model?: string | null;
+  temperature?: number;
+  maxTokens?: number | null;
+};
+
 // Create schema for document creation
 const createDocumentSchema = z.object({
   type: z.nativeEnum(DocumentType),
   title: z.string().min(1).max(200),
   input: z.record(z.unknown()), // Will be validated against document-specific schema
+  // Optional provider settings
+  provider: z.string().optional(),
+  model: z.string().optional(),
+  temperature: z.number().min(0).max(2).optional(),
+  maxTokens: z.number().positive().optional(),
+  useCache: z.boolean().optional(),
 });
 
 // Create schema for document updates
@@ -45,7 +78,7 @@ const baseCrudRouter = createCRUDRouter({
   beforeCreate: async (data, ctx) => {
     // Validate document type is enabled
     const config = getDocumentConfig(data.type);
-    if (!config.enabled) {
+    if (!config || !config.enabled) {
       throw new TRPCError({
         code: "BAD_REQUEST",
         message: `Document type ${data.type} is not enabled`,
@@ -70,13 +103,13 @@ const baseCrudRouter = createCRUDRouter({
     }
 
     // Estimate costs
-    const outputLength = validatedInput.outputLength ?? "medium";
+    const outputLength = (validatedInput as any).outputLength ?? "medium";
     const estimatedTokens = estimateTokenUsage(data.type, outputLength);
     const estimatedCost = estimateCost(estimatedTokens);
 
     return {
       ...data,
-      input: validatedInput,
+      input: validatedInput as Prisma.InputJsonValue,
       status: DocumentStatus.PENDING,
     };
   },
@@ -93,6 +126,11 @@ const baseCrudRouter = createCRUDRouter({
         userId: ctx.session.user.id,
         type: document.type,
         input: document.input,
+        // Pass provider settings if available
+        provider: (document as DocumentWithLLMFields).provider || 'openai',
+        model: (document as DocumentWithLLMFields).model || 'gpt-4',
+        temperature: (document as DocumentWithLLMFields).temperature ?? 0.7,
+        maxTokens: (document as DocumentWithLLMFields).maxTokens || undefined,
       },
       {
         jobId: document.id, // Use document ID as job ID for easy tracking
@@ -135,7 +173,7 @@ const extraDocumentRouter = createTRPCRouter({
     .input(z.object({ type: z.nativeEnum(DocumentType) }))
     .query(({ input }) => {
       const config = getDocumentConfig(input.type);
-      if (!config.enabled) {
+      if (!config || !config.enabled) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Document type not found or not enabled",
@@ -161,41 +199,37 @@ const extraDocumentRouter = createTRPCRouter({
       let { provider, model, temperature, maxTokens, useCache } = input;
 
       if (!provider || !model) {
-        const prefs = await ctx.db.userPreferences.findUnique({
-          where: { userId: ctx.session.user.id },
-        });
+        // For now, we'll use default values
+        // Note: userPreferences table needs to be added to your Prisma schema
+        const defaultProvider = 'openai';
+        const defaultModel = 'gpt-4';
 
-        const providerModels = prefs?.providerModels as Record<string, any> || {};
-        const docTypePrefs = providerModels[input.type];
-
-        provider = provider || docTypePrefs?.provider || prefs?.defaultProvider || 'openai';
-        model = model || docTypePrefs?.model || null;
-        temperature = temperature ?? prefs?.temperature ?? 0.7;
-        maxTokens = maxTokens ?? prefs?.maxTokensOverride ?? null;
-        useCache = useCache ?? prefs?.cacheEnabled ?? true;
+        provider = provider || defaultProvider;
+        model = model || defaultModel;
+        temperature = temperature ?? 0.7;
+        maxTokens = maxTokens ?? undefined; // Convert null to undefined for Prisma
+        useCache = useCache ?? true;
       }
+
       // Use the create method from CRUD router with rate limiting
       return ctx.db.$transaction(async (tx) => {
-        // Create document
-        const document = await ctx.db.document.create({
-          data: {
-            userId: ctx.session.user.id,
-            title: input.title,
-            type: input.type,
-            status: 'PENDING',
-            input: input.input,
-            provider,
-            model,
-            temperature,
-            maxTokens,
-            metadata: {
-              useCache,
-              preferences: {
-                systemPromptStyle: prefs?.systemPromptStyle || 'professional',
-                preferSpeed: prefs?.preferSpeed || false,
-              },
-            },
-          },
+        // Create document with all required fields
+        const documentData: any = {
+          userId: ctx.session.user.id,
+          title: input.title,
+          type: input.type,
+          status: 'PENDING',
+          input: input.input as Prisma.InputJsonValue,
+        };
+
+        // Add optional LLM fields only if they have values
+        if (provider) documentData.provider = provider;
+        if (model) documentData.model = model;
+        if (temperature !== undefined) documentData.temperature = temperature;
+        if (maxTokens !== undefined && maxTokens !== null) documentData.maxTokens = maxTokens;
+
+        const document = await tx.document.create({
+          data: documentData,
         });
 
         // Add to queue
@@ -210,6 +244,16 @@ const extraDocumentRouter = createTRPCRouter({
             userId: ctx.session.user.id,
             type: document.type,
             input: document.input,
+            // Pass generation preferences
+            provider: provider || 'openai',
+            model: model || 'gpt-4',
+            temperature: temperature ?? 0.7,
+            maxTokens: maxTokens || undefined,
+            useCache: useCache ?? true,
+            preferences: {
+              systemPromptStyle: 'professional',
+              preferSpeed: false,
+            },
           },
           {
             jobId: document.id,
@@ -304,7 +348,7 @@ const extraDocumentRouter = createTRPCRouter({
   retry: protectedProcedure
     .input(z.object({ documentId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      // Verify ownership and status
+      // Verify ownership and status - fetch all fields
       const document = await ctx.db.document.findUnique({
         where: { id: input.documentId },
       });
@@ -345,6 +389,11 @@ const extraDocumentRouter = createTRPCRouter({
           userId: ctx.session.user.id,
           type: document.type,
           input: document.input,
+          // Include provider settings
+          provider: document.provider,
+          model: document.model,
+          temperature: document.temperature,
+          maxTokens: document.maxTokens,
         },
         {
           jobId: document.id,

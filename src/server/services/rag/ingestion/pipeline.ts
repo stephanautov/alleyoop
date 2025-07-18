@@ -3,7 +3,7 @@
 
 import { DocumentChunker } from "./document";
 import { MetadataExtractor } from "./metadata";
-import { ProcessedDocument, IngestionOptions } from "../types";
+import type { ProcessedDocument, IngestionOptions } from "../types";
 import { Queue } from "bullmq";
 import { env } from "~/env";
 

@@ -1,9 +1,9 @@
 // src/server/services/llm/chains/outline.ts
 import { z } from 'zod';
 import { DocumentType } from '@prisma/client';
-import { LLMProvider } from '../base';
-import { ProviderName } from '../index';
-import { documentTypePrompts } from '../prompts';
+import type { LLMProvider } from '../base';
+import type { ProviderName } from '../index';
+import { documentPrompts } from '../prompts';
 
 // Schema for outline structure
 export const outlineSchema = z.object({
@@ -38,7 +38,7 @@ export class OutlineChain {
     private provider: LLMProvider,
     private providerName: ProviderName,
     private model: string
-  ) {}
+  ) { }
 
   async generate(params: {
     documentType: DocumentType;
@@ -46,23 +46,23 @@ export class OutlineChain {
     systemPrompt?: string;
   }): Promise<DocumentOutline> {
     // Get document-specific prompt builder
-    const promptBuilder = documentTypePrompts[params.documentType];
+    const promptBuilder = documentPrompts[params.documentType];
     if (!promptBuilder) {
       throw new Error(`No prompt builder found for document type: ${params.documentType}`);
     }
 
     // Build the outline prompt
     const prompt = promptBuilder.outline(params.input, this.providerName);
-    
+
     // Get provider-specific system prompt
-    const systemPrompt = params.systemPrompt || 
+    const systemPrompt = params.systemPrompt ||
       promptBuilder.systemPrompts?.[this.providerName] ||
       'You are an expert document writer. Generate detailed outlines in valid JSON format.';
 
     // Generate with retry logic
     let attempts = 0;
     const maxAttempts = 3;
-    
+
     while (attempts < maxAttempts) {
       try {
         const response = await this.provider.generateCompletion({
@@ -75,13 +75,13 @@ export class OutlineChain {
 
         // Parse and validate the response
         const outline = await this.parseOutline(response.content);
-        
+
         // Validate against schema
         const validated = outlineSchema.parse(outline);
-        
+
         // Post-process based on provider
         return this.postProcessOutline(validated, params.documentType);
-        
+
       } catch (error) {
         attempts++;
         if (attempts >= maxAttempts) {
@@ -142,7 +142,7 @@ export class OutlineChain {
     // Simple pattern matching for common outline structures
     for (const line of lines) {
       const trimmed = line.trim();
-      
+
       // Match section headers (1. Introduction, ## Introduction, etc.)
       const sectionMatch = trimmed.match(/^(?:\d+\.|#{1,3}|-)?\s*([A-Za-z\s]+)(?::)?$/);
       if (sectionMatch && trimmed.length < 50) {
@@ -204,7 +204,7 @@ export class OutlineChain {
       case DocumentType.BUSINESS_PLAN:
         // Ensure financial sections are properly weighted
         if (outline.sections.financial_projections) {
-          outline.sections.financial_projections.estimatedWords = 
+          outline.sections.financial_projections.estimatedWords =
             Math.max(outline.sections.financial_projections.estimatedWords, 800);
         }
         break;

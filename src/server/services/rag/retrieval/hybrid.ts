@@ -4,7 +4,7 @@
 import { PrismaClient } from "@prisma/client";
 import { BaseVectorStore } from "../vectorstore/base";
 import { EmbeddingService } from "../embeddings";
-import { SearchResult, RetrievalOptions } from "../types";
+import type { SearchResult, RetrievalOptions } from "../types";
 
 export class HybridSearch {
     constructor(

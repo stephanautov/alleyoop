@@ -6,7 +6,7 @@ import { useSocket } from './use-socket';
 
 export function useProgressToast(documentId: string, documentTitle: string) {
     const { socket, isConnected } = useSocket();
-    const toastIdRef = useRef<string | number>();
+    const toastIdRef = useRef<string | number | null>(null);
 
     useEffect(() => {
         if (!socket || !isConnected) return;

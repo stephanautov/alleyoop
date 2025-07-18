@@ -3,7 +3,7 @@
 import { type PrismaClient } from '@prisma/client';
 import { TRPCError } from '@trpc/server';
 import { LLMService, type LLMServiceConfig, type ProviderName } from '../llm';
-import { DOCUMENT_PROMPTS, type DocumentPrompts } from '~/config/prompts';
+import { DOCUMENT_PROMPTS, type DocumentPrompts } from '../llm/prompts';
 import { type DocumentType } from '@prisma/client';
 import { CacheService } from '../cache';
 import { RAGService } from '../rag';
@@ -11,6 +11,8 @@ import { PreferencesSyncService } from '../preferences/sync';
 import { getIO } from '~/server/websocket';
 import { Redis } from 'ioredis';
 import { env } from '~/env';
+import { EventEmitter } from 'events';
+import { type GenerateDocumentParams, type GeneratedDocument, type DocumentProviderName, type ToneType, type ProgressEventData, type SectionData } from './types';
 
 export interface UnifiedGenerationOptions {
     userId: string;
@@ -18,7 +20,7 @@ export interface UnifiedGenerationOptions {
     input: any;
     title: string;
     // Optional overrides
-    provider?: ProviderName;
+    provider?: DocumentProviderName;
     model?: string;
     temperature?: number;
     maxTokens?: number;
@@ -31,7 +33,7 @@ export interface UnifiedGenerationOptions {
 export interface GenerationResult {
     documentId: string;
     content: string;
-    provider: ProviderName;
+    provider: DocumentProviderName;
     model: string;
     cost: number;
     tokenUsage: {
@@ -289,9 +291,9 @@ export class UnifiedDocumentService {
             case 'CASE_SUMMARY':
                 return `${input.caseTitle} ${input.legalIssues} ${input.parties}`;
             case 'BUSINESS_PLAN':
-                return `${input.businessName} ${input.industry} ${input.products}`;
+                return `${input.business.name} ${input.industry} ${input.products}`;
             case 'GRANT_PROPOSAL':
-                return `${input.projectTitle} ${input.organization} ${input.objectives}`;
+                return `${input.title} ${input.organization} ${input.objectives}`;
             case 'MEDICAL_REPORT':
                 return `${input.patientCondition} ${input.symptoms} ${input.diagnosis}`;
             default:
@@ -526,8 +528,8 @@ export class UnifiedDocumentService {
     /**
      * Get default model for provider
      */
-    private getDefaultModel(provider: ProviderName): string {
-        const defaults: Record<ProviderName, string> = {
+    private getDefaultModel(provider: DocumentProviderName): string {
+        const defaults: Record<DocumentProviderName, string> = {
             openai: 'gpt-4-turbo-preview',
             anthropic: 'claude-3-opus-20240229',
             gemini: 'gemini-1.5-pro',

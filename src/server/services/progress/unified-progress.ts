@@ -53,6 +53,7 @@ export const UnifiedProgressSchema = z.object({
 });
 
 export type UnifiedProgress = z.infer<typeof UnifiedProgressSchema>;
+export type ProgressMetadata = UnifiedProgress['metadata'];
 
 /**
  * Unified progress service that handles all progress tracking
@@ -66,39 +67,61 @@ export class UnifiedProgressService extends EventEmitter {
     constructor(redisUrl?: string) {
         super();
         this.redis = new Redis(redisUrl || env.REDIS_URL);
+        this.io = getIO();
     }
 
     /**
-     * Initialize Socket.IO instance
+     * Generate a unique progress ID
      */
-    initializeSocketIO() {
-        try {
-            this.io = getIO();
-            console.log('Socket.IO initialized for progress service');
-        } catch (error) {
-            console.warn('Socket.IO not initialized, progress will not be broadcast');
-        }
+    generateProgressId(type: ProgressType, resourceId: string): string {
+        return `${type}:${resourceId}:${Date.now()}`;
     }
 
     /**
-     * Create a new progress tracker
+     * Get Redis key for progress
+     */
+    private getRedisKey(progressId: string): string {
+        return `progress:${progressId}`;
+    }
+
+    /**
+     * Get progress key for backward compatibility
+     */
+    private getProgressKey(type: ProgressType, resourceId: string): string {
+        return `progress:${type}:${resourceId}`;
+    }
+
+    /**
+     * Get room names for broadcasting
+     */
+    private getProgressRooms(progress: UnifiedProgress): string[] {
+        return [
+            `progress:${progress.type}:${progress.resourceId}`,
+            `user:${progress.userId}:progress`,
+        ];
+    }
+
+    /**
+     * Create new progress entry
      */
     async createProgress(
         type: ProgressType,
         resourceId: string,
         userId: string,
-        initialMessage: string = 'Initializing...'
+        message: string,
+        metadata: Partial<ProgressMetadata> = {}
     ): Promise<string> {
-        const progressId = `${type}:${resourceId}`;
+        const progressId = this.generateProgressId(type, resourceId);
         const progress: UnifiedProgress = {
             type,
             resourceId,
             userId,
             stage: 'initializing',
             progress: 0,
-            message: initialMessage,
+            message,
             metadata: {
                 startedAt: Date.now(),
+                ...metadata,
             },
         };
 
@@ -110,11 +133,11 @@ export class UnifiedProgressService extends EventEmitter {
     }
 
     /**
-     * Update progress with partial data
+     * Update existing progress
      */
     async updateProgress(
         progressId: string,
-        update: Partial<Omit<UnifiedProgress, 'type' | 'resourceId' | 'userId'>>
+        updates: Partial<Omit<UnifiedProgress, 'type' | 'resourceId' | 'userId'>>
     ): Promise<void> {
         const current = await this.getProgressById(progressId);
         if (!current) {
@@ -123,45 +146,16 @@ export class UnifiedProgressService extends EventEmitter {
 
         const updated: UnifiedProgress = {
             ...current,
-            ...update,
+            ...updates,
             metadata: {
                 ...current.metadata,
-                ...update.metadata,
+                ...updates.metadata,
             },
         };
 
-        // Calculate estimated time remaining
-        if (updated.progress > 0 && updated.progress < 100) {
-            const elapsed = Date.now() - updated.metadata.startedAt;
-            const rate = updated.progress / elapsed;
-            const remaining = (100 - updated.progress) / rate;
-            updated.metadata.estimatedTimeRemaining = Math.round(remaining);
-        }
-
-        // Validate the updated progress
-        const validated = UnifiedProgressSchema.parse(updated);
-
-        await this.saveProgress(progressId, validated);
-        this.broadcastProgress(validated);
-        this.emit('progress:updated', validated);
-    }
-
-    /**
-     * Update progress with full UnifiedProgress object (for backward compatibility)
-     */
-    async setProgress(progress: UnifiedProgress): Promise<void> {
-        const key = this.getProgressKey(progress.type, progress.resourceId);
-        const validated = UnifiedProgressSchema.parse(progress);
-
-        await this.redis.set(
-            key,
-            JSON.stringify(validated),
-            'EX',
-            this.progressTTL
-        );
-
-        this.broadcastProgress(validated);
-        this.emit('progress', validated);
+        await this.saveProgress(progressId, updated);
+        this.broadcastProgress(updated);
+        this.emit('progress:updated', updated);
     }
 
     /**
@@ -171,11 +165,15 @@ export class UnifiedProgressService extends EventEmitter {
         progressId: string,
         message: string = 'Completed successfully'
     ): Promise<void> {
+        const current = await this.getProgressById(progressId);
+        if (!current) return;
+
         await this.updateProgress(progressId, {
             stage: 'completed',
             progress: 100,
             message,
             metadata: {
+                ...current.metadata,
                 estimatedTimeRemaining: 0,
             },
         });
@@ -204,6 +202,7 @@ export class UnifiedProgressService extends EventEmitter {
             stage: 'failed',
             message: 'Operation failed',
             metadata: {
+                ...current.metadata,
                 error,
                 estimatedTimeRemaining: 0,
             },
@@ -242,31 +241,40 @@ export class UnifiedProgressService extends EventEmitter {
     /**
      * Get progress by type and resource ID
      */
-    async getProgress(type: ProgressType, resourceId: string): Promise<UnifiedProgress | null> {
-        const progressId = `${type}:${resourceId}`;
-        return this.getProgressById(progressId);
+    async getProgress(
+        type: ProgressType,
+        resourceId: string
+    ): Promise<UnifiedProgress | null> {
+        const key = this.getProgressKey(type, resourceId);
+        const data = await this.redis.get(key);
+        if (!data) return null;
+
+        try {
+            return UnifiedProgressSchema.parse(JSON.parse(data));
+        } catch (error) {
+            console.error('Invalid progress data:', error);
+            return null;
+        }
     }
 
     /**
-     * Get all active progress for a user
+     * Get all progress for a user
      */
     async getUserProgress(userId: string): Promise<UnifiedProgress[]> {
-        const pattern = `progress:*`;
-        const keys = await this.redis.keys(pattern);
-
+        const keys = await this.redis.keys(`progress:*`);
         const progress: UnifiedProgress[] = [];
 
         for (const key of keys) {
             const data = await this.redis.get(key);
-            if (data) {
-                try {
-                    const parsed = UnifiedProgressSchema.parse(JSON.parse(data));
-                    if (parsed.userId === userId) {
-                        progress.push(parsed);
-                    }
-                } catch (error) {
-                    // Skip invalid entries
+            if (!data) continue;
+
+            try {
+                const parsed = UnifiedProgressSchema.parse(JSON.parse(data));
+                if (parsed.userId === userId) {
+                    progress.push(parsed);
                 }
+            } catch (error) {
+                console.error('Invalid progress data:', error);
             }
         }
 
@@ -274,54 +282,19 @@ export class UnifiedProgressService extends EventEmitter {
     }
 
     /**
-     * Subscribe to progress updates for a resource
-     */
-    subscribeToProgress(
-        type: ProgressType,
-        resourceId: string,
-        callback: (progress: UnifiedProgress) => void
-    ): () => void {
-        const handler = (progress: UnifiedProgress) => {
-            if (progress.type === type && progress.resourceId === resourceId) {
-                callback(progress);
-            }
-        };
-
-        this.on('progress', handler);
-        this.on('progress:updated', handler);
-
-        // Return unsubscribe function
-        return () => {
-            this.off('progress', handler);
-            this.off('progress:updated', handler);
-        };
-    }
-
-    /**
      * Subscribe socket to progress updates
      */
-    subscribeSocket(
-        progressId: string,
-        userId: string,
-        socketId: string
-    ): void {
+    subscribeSocket(progressId: string, userId: string, socketId: string): void {
         if (!this.io) return;
 
         const socket = this.io.sockets.sockets.get(socketId);
         if (!socket) return;
 
-        const [type, resourceId] = progressId.split(':');
-        const room = `${type}:${resourceId}`;
+        // Join progress-specific room
+        socket.join(`progress:${progressId}`);
 
-        socket.join(room);
-        console.log(`Socket ${socketId} subscribed to progress ${progressId}`);
-
-        // Send current progress immediately
-        this.getProgressById(progressId).then(progress => {
-            if (progress && progress.userId === userId) {
-                socket.emit('progress:update', progress);
-            }
-        });
+        // Join user progress room
+        socket.join(`user:${userId}:progress`);
     }
 
     /**
@@ -333,23 +306,29 @@ export class UnifiedProgressService extends EventEmitter {
         const socket = this.io.sockets.sockets.get(socketId);
         if (!socket) return;
 
-        const [type, resourceId] = progressId.split(':');
-        const room = `${type}:${resourceId}`;
-
-        socket.leave(room);
-        console.log(`Socket ${socketId} unsubscribed from progress ${progressId}`);
+        socket.leave(`progress:${progressId}`);
     }
 
     /**
-     * Clear progress for a resource
+     * Backward compatibility: Set progress (creates or updates)
      */
-    async clearProgress(type: ProgressType, resourceId: string): Promise<void> {
-        const key = this.getProgressKey(type, resourceId);
-        await this.redis.del(key);
+    async setProgress(progress: UnifiedProgress): Promise<void> {
+        const key = this.getProgressKey(progress.type, progress.resourceId);
+        const validated = UnifiedProgressSchema.parse(progress);
+
+        await this.redis.set(
+            key,
+            JSON.stringify(validated),
+            'EX',
+            this.progressTTL
+        );
+
+        this.broadcastProgress(validated);
+        this.emit('progress', validated);
     }
 
     /**
-     * Create specialized progress trackers
+     * Document-specific progress methods
      */
     async createDocumentProgress(
         documentId: string,
@@ -357,77 +336,28 @@ export class UnifiedProgressService extends EventEmitter {
         provider: string,
         model: string
     ): Promise<string> {
-        const progressId = await this.createProgress(
+        return this.createProgress(
             'document-generation',
             documentId,
             userId,
-            'Preparing document generation...'
-        );
-
-        await this.updateProgress(progressId, {
-            metadata: {
+            'Initializing document generation...',
+            {
+                startedAt: Date.now(),
                 provider,
                 model,
-            },
-        });
-
-        return progressId;
-    }
-
-    async createRAGProgress(
-        sourceId: string,
-        userId: string,
-        totalChunks: number
-    ): Promise<string> {
-        const progressId = await this.createProgress(
-            'rag-embedding',
-            sourceId,
-            userId,
-            'Processing document for embedding...'
+            }
         );
-
-        await this.updateProgress(progressId, {
-            metadata: {
-                totalChunks,
-                chunksProcessed: 0,
-                embeddingsGenerated: 0,
-            },
-        });
-
-        return progressId;
     }
 
-    async createFileGenerationProgress(
-        sessionId: string,
-        userId: string,
-        totalFiles: number
-    ): Promise<string> {
-        const progressId = await this.createProgress(
-            'file-generation',
-            sessionId,
-            userId,
-            'Generating files...'
-        );
-
-        await this.updateProgress(progressId, {
-            metadata: {
-                totalFiles,
-                filesGenerated: 0,
-            },
-        });
-
-        return progressId;
-    }
-
-    /**
-     * Progress update helpers for specific operations
-     */
     async updateDocumentProgress(
         progressId: string,
         stage: 'outline' | 'sections' | 'refinement',
         progress: number,
         currentSection?: string
     ): Promise<void> {
+        const current = await this.getProgressById(progressId);
+        if (!current) return;
+
         const stageMessages = {
             outline: 'Creating document outline...',
             sections: 'Writing content sections...',
@@ -439,9 +369,32 @@ export class UnifiedProgressService extends EventEmitter {
             progress,
             message: stageMessages[stage],
             metadata: {
+                ...current.metadata,
                 currentSection,
             },
         });
+    }
+
+    /**
+     * RAG-specific progress methods
+     */
+    async createRAGProgress(
+        sourceId: string,
+        userId: string,
+        totalChunks: number
+    ): Promise<string> {
+        return this.createProgress(
+            'rag-embedding',
+            sourceId,
+            userId,
+            'Starting document processing...',
+            {
+                startedAt: Date.now(),
+                totalChunks,
+                chunksProcessed: 0,
+                embeddingsGenerated: 0,
+            }
+        );
     }
 
     async updateRAGProgress(
@@ -460,10 +413,32 @@ export class UnifiedProgressService extends EventEmitter {
             progress,
             message: `Processing chunk ${chunksProcessed} of ${totalChunks}...`,
             metadata: {
+                ...current.metadata,
                 chunksProcessed,
                 embeddingsGenerated,
             },
         });
+    }
+
+    /**
+     * File generation progress methods
+     */
+    async createFileProgress(
+        jobId: string,
+        userId: string,
+        totalFiles: number
+    ): Promise<string> {
+        return this.createProgress(
+            'file-generation',
+            jobId,
+            userId,
+            'Preparing file generation...',
+            {
+                startedAt: Date.now(),
+                totalFiles,
+                filesGenerated: 0,
+            }
+        );
     }
 
     async updateFileGenerationProgress(
@@ -482,6 +457,7 @@ export class UnifiedProgressService extends EventEmitter {
             progress,
             message: `Generating ${currentFile}...`,
             metadata: {
+                ...current.metadata,
                 filesGenerated,
                 currentFile,
             },
@@ -510,141 +486,55 @@ export class UnifiedProgressService extends EventEmitter {
         });
     }
 
-    private getProgressRooms(progress: UnifiedProgress): string[] {
-        return [
-            `user:${progress.userId}`,
-            `${progress.type}:${progress.resourceId}`,
-        ];
-    }
-
-    private getRedisKey(progressId: string): string {
-        return `progress:${progressId}`;
-    }
-
-    private getProgressKey(type: ProgressType, resourceId: string): string {
-        return `progress:${type}:${resourceId}`;
-    }
-
     /**
-     * Cleanup old progress entries
+     * Cleanup expired progress entries
      */
-    async cleanupOldProgress(): Promise<void> {
-        const pattern = 'progress:*';
-        const keys = await this.redis.keys(pattern);
-
+    async cleanup(): Promise<number> {
+        const keys = await this.redis.keys('progress:*');
         let cleaned = 0;
+
         for (const key of keys) {
             const ttl = await this.redis.ttl(key);
             if (ttl === -1) {
-                // No expiry set, check age
-                const data = await this.redis.get(key);
-                if (data) {
-                    try {
-                        const progress = JSON.parse(data);
-                        const age = Date.now() - (progress.metadata?.startedAt || 0);
-                        if (age > 24 * 60 * 60 * 1000) { // 24 hours
-                            await this.redis.del(key);
-                            cleaned++;
-                        }
-                    } catch {
-                        // Delete invalid entries
-                        await this.redis.del(key);
-                        cleaned++;
-                    }
-                }
+                // No expiration set, set default
+                await this.redis.expire(key, this.progressTTL);
+            } else if (ttl === -2) {
+                // Key doesn't exist (race condition)
+                cleaned++;
             }
         }
 
-        if (cleaned > 0) {
-            console.log(`Cleaned up ${cleaned} old progress entries`);
-        }
+        return cleaned;
     }
 }
 
-// Export singleton instance
-let progressService: UnifiedProgressService;
+// Create singleton instance
+export const progressService = new UnifiedProgressService();
 
-export function getProgressService(): UnifiedProgressService {
-    if (!progressService) {
-        progressService = new UnifiedProgressService();
-        progressService.initializeSocketIO();
-
-        // Cleanup old progress entries periodically
-        setInterval(() => {
-            progressService.cleanupOldProgress().catch(console.error);
-        }, 60 * 60 * 1000); // Every hour
-    }
-
-    return progressService;
-}
-
-// Export for backward compatibility
-export const progressService = getProgressService();
-
-// Helper functions for specific progress types (backward compatible)
+// Export helper objects for backward compatibility
 export const documentProgress = {
-    start: (documentId: string, userId: string) => {
-        const service = getProgressService();
-        return service.setProgress({
-            type: 'document-generation',
-            resourceId: documentId,
-            userId,
-            stage: 'initializing',
-            progress: 0,
-            message: 'Starting document generation...',
-            metadata: { startedAt: Date.now() },
-        });
-    },
-
-    updateSection: (documentId: string, userId: string, section: string, progress: number) => {
-        const service = getProgressService();
-        return service.setProgress({
-            type: 'document-generation',
-            resourceId: documentId,
-            userId,
-            stage: 'sections',
-            progress,
-            message: `Generating ${section}...`,
-            metadata: {
-                currentSection: section,
-                startedAt: Date.now(),
-            },
-        });
-    },
+    start: progressService.createDocumentProgress.bind(progressService),
+    updateProgress: progressService.updateDocumentProgress.bind(progressService),
+    updateSection: progressService.updateDocumentProgress.bind(progressService),
+    complete: progressService.completeProgress.bind(progressService),
+    fail: progressService.failProgress.bind(progressService),
 };
 
 export const ragProgress = {
-    start: (sourceId: string, userId: string, totalChunks: number) => {
-        const service = getProgressService();
-        return service.setProgress({
-            type: 'rag-embedding',
-            resourceId: sourceId,
-            userId,
-            stage: 'processing',
-            progress: 0,
-            message: 'Processing document...',
-            metadata: {
-                totalChunks,
-                chunksProcessed: 0,
-                startedAt: Date.now(),
-            },
-        });
-    },
-
-    updateChunk: (sourceId: string, userId: string, chunksProcessed: number, totalChunks: number) => {
-        const service = getProgressService();
-        return service.setProgress({
-            type: 'rag-embedding',
-            resourceId: sourceId,
-            userId,
-            stage: 'embedding',
-            progress: Math.round((chunksProcessed / totalChunks) * 100),
-            message: `Processing chunk ${chunksProcessed} of ${totalChunks}...`,
-            metadata: {
-                chunksProcessed,
-                totalChunks,
-                startedAt: Date.now(),
-            },
-        });
-    },
+    start: progressService.createRAGProgress.bind(progressService),
+    updateChunk: progressService.updateRAGProgress.bind(progressService),
+    complete: progressService.completeProgress.bind(progressService),
+    fail: progressService.failProgress.bind(progressService),
 };
+
+export const fileProgress = {
+    start: progressService.createFileProgress.bind(progressService),
+    updateFile: progressService.updateFileGenerationProgress.bind(progressService),
+    complete: progressService.completeProgress.bind(progressService),
+    fail: progressService.failProgress.bind(progressService),
+};
+
+// Export factory function for testing
+export function getProgressService(redisUrl?: string): UnifiedProgressService {
+    return new UnifiedProgressService(redisUrl);
+}

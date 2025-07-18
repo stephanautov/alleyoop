@@ -1,6 +1,8 @@
 // File: src/server/services/rag/embeddings/base.ts
 // ============================================
 
+import type { EmbeddingResult, TextChunk, ChunkWithEmbedding } from '../types';
+
 export abstract class BaseEmbeddingService {
     protected model: string;
     protected dimension: number;
@@ -35,11 +37,25 @@ export abstract class BaseEmbeddingService {
         const texts = chunks.map(chunk => chunk.content);
         const embeddings = await this.embedBatch(texts);
 
-        return chunks.map((chunk, index) => ({
-            ...chunk,
-            embedding: embeddings[index].embedding,
-            tokenCount: embeddings[index].tokenCount,
-        }));
+        // Ensure we have embeddings for all chunks
+        if (embeddings.length !== chunks.length) {
+            throw new Error(
+                `Embedding batch size mismatch: expected ${chunks.length}, got ${embeddings.length}`
+            );
+        }
+
+        return chunks.map((chunk, index) => {
+            const embedding = embeddings[index];
+            if (!embedding) {
+                throw new Error(`Missing embedding for chunk at index ${index}`);
+            }
+
+            return {
+                ...chunk,
+                embedding: embedding.embedding,
+                tokenCount: embedding.tokenCount,
+            };
+        });
     }
 
     /**

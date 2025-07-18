@@ -7,31 +7,31 @@ import { medicalReportSchema } from '~/config/schemas/medical-report';
 type MedicalReportInput = z.infer<typeof medicalReportSchema>;
 
 export const medicalReportPrompts = {
-    // System prompts optimized per provider
-    systemPrompts: {
-        openai: `You are an experienced medical professional skilled in creating clear, accurate medical reports. You excel at organizing clinical information in a logical manner while maintaining HIPAA compliance and medical accuracy. Note: All generated content is for educational or template purposes only.`,
+  // System prompts optimized per provider
+  systemPrompts: {
+    openai: `You are an experienced medical professional skilled in creating clear, accurate medical reports. You excel at organizing clinical information in a logical manner while maintaining HIPAA compliance and medical accuracy. Note: All generated content is for educational or template purposes only.`,
 
-        anthropic: `You are a thoughtful medical writer who creates comprehensive, patient-centered medical reports. You balance clinical precision with clarity, ensuring reports are both medically accurate and understandable. Note: All generated content is for educational or template purposes only.`,
+    anthropic: `You are a thoughtful medical writer who creates comprehensive, patient-centered medical reports. You balance clinical precision with clarity, ensuring reports are both medically accurate and understandable. Note: All generated content is for educational or template purposes only.`,
 
-        gemini: `You are a detail-oriented medical documentation specialist who creates thorough, well-organized medical reports. You ensure all relevant clinical information is included while maintaining professional standards. Note: All generated content is for educational or template purposes only.`,
+    gemini: `You are a detail-oriented medical documentation specialist who creates thorough, well-organized medical reports. You ensure all relevant clinical information is included while maintaining professional standards. Note: All generated content is for educational or template purposes only.`,
 
-        perplexity: `You are a research-focused medical writer who creates evidence-based medical reports with proper references to current medical literature and guidelines. Note: All generated content is for educational or template purposes only.`,
+    perplexity: `You are a research-focused medical writer who creates evidence-based medical reports with proper references to current medical literature and guidelines. Note: All generated content is for educational or template purposes only.`,
 
-        llama: `You are a practical medical report writer who creates clear, standardized medical documentation. You focus on essential clinical information and follow established medical reporting formats. Note: All generated content is for educational or template purposes only.`
-    },
+    llama: `You are a practical medical report writer who creates clear, standardized medical documentation. You focus on essential clinical information and follow established medical reporting formats. Note: All generated content is for educational or template purposes only.`
+  },
 
-    // Outline generation prompt
-    outline: (input: MedicalReportInput, provider: string) => {
-        const reportType = input.reportType;
-        const specialty = input.specialty;
+  // Outline generation prompt
+  outline: (input: MedicalReportInput, provider: string) => {
+    const reportType = input.reportType;
+    const specialty = input.specialty;
 
-        let providerSpecific = '';
+    let providerSpecific = '';
 
-        if (provider === 'perplexity') {
-            providerSpecific = `\n\nIMPORTANT: Include references to relevant clinical guidelines and medical literature where appropriate.`;
-        }
+    if (provider === 'perplexity') {
+      providerSpecific = `\n\nIMPORTANT: Include references to relevant clinical guidelines and medical literature where appropriate.`;
+    }
 
-        return `Create a detailed outline for a ${reportType} medical report template.
+    return `Create a detailed outline for a ${reportType} medical report template.
 
 IMPORTANT DISCLAIMER: This is for creating a template/educational example only. 
 No real patient data should be used. Use placeholder information marked clearly as [PLACEHOLDER].
@@ -90,17 +90,17 @@ Generate a JSON outline with the following structure:
     }
   }
 }`;
-    },
+  },
 
-    // Section generation for medical reports
-    section: (
-        sectionId: string,
-        sectionOutline: any,
-        fullOutline: any,
-        originalInput: MedicalReportInput,
-        previousSections?: Record<string, string>
-    ) => {
-        return `Write the "${sectionOutline.title}" section of the medical report template.
+  // Section generation for medical reports
+  section: (
+    sectionId: string,
+    sectionOutline: any,
+    fullOutline: any,
+    originalInput: MedicalReportInput,
+    previousSections?: Record<string, string>
+  ) => {
+    return `Write the "${sectionOutline.title}" section of the medical report template.
 
 REMINDER: Use [PLACEHOLDER] for any patient-specific information.
 This is a template for ${originalInput.reportType} in ${originalInput.specialty}.
@@ -120,11 +120,11 @@ Format: ${sectionOutline.format || 'narrative'}
 
 Example format:
 "The patient is a [PLACEHOLDER: age] year old [PLACEHOLDER: gender] who presents with..."`;
-    },
+  },
 
-    // Refinement for medical reports
-    refinement: (content: string, input: MedicalReportInput) => {
-        return `Review and refine this ${input.reportType} medical report template.
+  // Refinement for medical reports
+  refinement: (content: string, input: MedicalReportInput) => {
+    return `Review and refine this ${input.reportType} medical report template.
 
 Current content:
 ${content}
@@ -139,7 +139,7 @@ Refinement goals:
 7. Add disclaimer about template/educational use if not present
 
 Maintain professional medical documentation standards throughout.`;
-    }
+  }
 };
 
 

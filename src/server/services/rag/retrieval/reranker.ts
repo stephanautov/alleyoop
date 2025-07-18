@@ -2,7 +2,7 @@
 // ============================================
 
 import { OpenAI } from "openai";
-import { SearchResult } from "../types";
+import type { SearchResult } from "../types";
 import { env } from "~/env";
 
 export interface RerankOptions {

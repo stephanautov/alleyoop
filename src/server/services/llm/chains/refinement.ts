@@ -1,8 +1,8 @@
 // src/server/services/llm/chains/refinement.ts
 import { DocumentType } from '@prisma/client';
-import { LLMProvider } from '../base';
-import { ProviderName } from '../index';
-import { DocumentOutline } from './outline';
+import type { LLMProvider } from '../base';
+import type { ProviderName } from '../index';
+import type { DocumentOutline } from './outline';
 import { ResponseValidator } from '../utils/validator';
 import { TokenCounter } from '../utils/tokenizer';
 
@@ -81,7 +81,7 @@ export class RefinementChain {
 
     // Stage 4: Final polish
     const finalResult = await this.finalPolish(refinedContent, context);
-    
+
     // Calculate quality metrics
     const metadata = await this.calculateMetadata(finalResult.content, context);
 
@@ -111,7 +111,7 @@ export class RefinementChain {
     for (const sectionId of orderedSections) {
       const content = context.sections[sectionId];
       const sectionInfo = context.outline.sections[sectionId];
-      
+
       if (content && sectionInfo) {
         parts.push(`## ${sectionInfo.title}\n\n${content}`);
       }
@@ -134,33 +134,33 @@ export class RefinementChain {
 
   private formatIntroduction(intro: any): string {
     const parts: string[] = [];
-    
+
     if (intro.hook) {
       parts.push(intro.hook);
     }
-    
+
     if (intro.thesis) {
       parts.push(intro.thesis);
     }
-    
+
     if (intro.preview) {
       parts.push(intro.preview);
     }
-    
+
     return parts.join(' ');
   }
 
   private formatConclusion(conclusion: any): string {
     const parts: string[] = ['## Conclusion\n'];
-    
+
     if (conclusion.summary) {
       parts.push(conclusion.summary);
     }
-    
+
     if (conclusion.callToAction) {
       parts.push(conclusion.callToAction);
     }
-    
+
     return parts.join('\n\n');
   }
 
@@ -234,7 +234,7 @@ Make minimal changes and maintain the ${context.requirements.tone} tone.`;
       });
 
       refinedChunks.push(response.content);
-      
+
       // Track changes (simplified - in production, use diff algorithm)
       if (response.content !== chunks[i]) {
         changes.push({
@@ -357,7 +357,7 @@ Make only essential improvements to perfect the document.`;
 
     // Validate the response maintains document integrity
     const validation = this.validator.validateRefinement(content, response.content);
-    
+
     if (!validation.isValid) {
       // Fall back to original if refinement corrupted document
       return {
@@ -416,10 +416,10 @@ Make only essential improvements to perfect the document.`;
     // Flesch Reading Ease formula (normalized to 0-1)
     const avgWordsPerSentence = words.length / sentences.length;
     const avgSyllablesPerWord = syllables / words.length;
-    
+
     let score = 206.835 - 1.015 * avgWordsPerSentence - 84.6 * avgSyllablesPerWord;
     score = Math.max(0, Math.min(100, score));
-    
+
     return score / 100;
   }
 
@@ -427,7 +427,7 @@ Make only essential improvements to perfect the document.`;
     word = word.toLowerCase();
     let count = 0;
     let previousWasVowel = false;
-    
+
     for (let i = 0; i < word.length; i++) {
       const isVowel = /[aeiou]/.test(word[i]);
       if (isVowel && !previousWasVowel) {
@@ -435,12 +435,12 @@ Make only essential improvements to perfect the document.`;
       }
       previousWasVowel = isVowel;
     }
-    
+
     // Adjust for silent e
     if (word.endsWith('e')) {
       count--;
     }
-    
+
     // Ensure at least one syllable
     return Math.max(1, count);
   }
@@ -454,12 +454,12 @@ Make only essential improvements to perfect the document.`;
     ];
 
     let inconsistencies = 0;
-    
+
     for (const variations of termVariations) {
-      const counts = variations.map(term => 
+      const counts = variations.map(term =>
         (text.match(new RegExp(`\\b${term}\\b`, 'gi')) || []).length
       );
-      
+
       const usedVariations = counts.filter(c => c > 0).length;
       if (usedVariations > 1) {
         inconsistencies++;
@@ -475,7 +475,7 @@ Make only essential improvements to perfect the document.`;
     targetTone: string
   ): Promise<number> {
     const sampleText = content.substring(0, 1000);
-    
+
     const prompt = `Rate how well this text matches a ${targetTone} tone on a scale of 0-100:
 
 "${sampleText}"
@@ -508,7 +508,7 @@ Respond with only a number.`;
           chunks.push(currentChunk.trim());
           currentChunk = '';
         }
-        
+
         // Handle paragraphs larger than chunk size
         if (paragraph.length > maxChunkSize) {
           const sentences = paragraph.split(/(?<=[.!?])\s+/);
@@ -537,11 +537,11 @@ Respond with only a number.`;
 
   private truncateForContext(text: string, maxLength: number): string {
     if (text.length <= maxLength) return text;
-    
+
     const halfLength = Math.floor(maxLength / 2);
     const start = text.substring(0, halfLength);
     const end = text.substring(text.length - halfLength);
-    
+
     return `${start}\n\n[... middle content truncated for context ...]\n\n${end}`;
   }
 }

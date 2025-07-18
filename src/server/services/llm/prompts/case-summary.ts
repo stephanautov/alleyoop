@@ -20,8 +20,8 @@ export const caseSummaryPrompts = {
 
     // Outline generation prompt
     outline: (input: CaseSummaryInput, provider: string) => {
-        const caseType = input.caseType;
-        const analysisDepth = input.analysisDepth;
+        const caseType = input.caseInfo.caseName;
+        const analysisDepth = input.outputLength;
 
         let providerSpecific = '';
 
@@ -34,11 +34,11 @@ export const caseSummaryPrompts = {
         return `Create a detailed outline for a ${caseType} case summary.
 
 Case Details:
-- Case Name: ${input.caseName}
-- Citation: ${input.citation}
-- Court: ${input.court}
-- Date: ${input.dateDecided}
-- Judge(s): ${input.judges || 'Not specified'}
+- Case Name: ${input.title}
+- Citation: ${input.caseInfo.caseNumber}
+- Court: ${input.caseInfo.court}
+- Date: ${input.caseInfo.dateDecided}
+- Judge(s): ${input.caseInfo.judges || 'Not specified'}
 
 Requirements:
 - Case Type: ${caseType}
@@ -105,14 +105,14 @@ Build on this foundation without repetition.`;
 Section Details:
 ${JSON.stringify(sectionOutline, null, 2)}
 
-Case: ${originalInput.caseName}
+Case: ${originalInput.title}
 Analysis Depth: ${analysisDepth}
 ${contextPrompt}
 
 Writing Requirements:
 1. Use proper legal citation format
 2. Be precise with legal terminology
-3. ${analysisDepth === 'detailed' ? 'Include extensive analysis and context' : 'Keep analysis concise and focused'}
+3. ${analysisDepth === 'comprehensive' ? 'Include extensive analysis and context' : 'Keep analysis concise and focused'}
 4. Maintain objectivity while noting important interpretations
 5. Use clear topic sentences and transitions
 
@@ -121,7 +121,7 @@ Format appropriately based on the section type (${sectionOutline.formatting || '
 
     // Refinement prompt
     refinement: (content: string, input: CaseSummaryInput) => {
-        return `Review and refine this case summary for ${input.caseName}.
+        return `Review and refine this case summary for ${input.title}.
 
 Current content:
 ${content}
@@ -141,15 +141,15 @@ Make minimal changes - only improve accuracy, clarity, and legal soundness.`;
     // Provider-specific generation methods
     generateWithProvider: {
         perplexity: (input: CaseSummaryInput) => {
-            return `Research and analyze the case ${input.caseName}. Find all relevant precedents, statutes, and subsequent cases that cite this decision. Include proper legal citations throughout.`;
+            return `Research and analyze the case ${input.title}. Find all relevant precedents, statutes, and subsequent cases that cite this decision. Include proper legal citations throughout.`;
         },
 
         anthropic: (input: CaseSummaryInput) => {
-            return `Analyze ${input.caseName} with attention to its broader legal significance, the evolution of the legal principles involved, and its place in the development of ${input.caseType} law.`;
+            return `Analyze ${input.title} with attention to its broader legal significance, the evolution of the legal principles involved, and its place in the development of ${input.caseType} law.`;
         },
 
         gemini: (input: CaseSummaryInput) => {
-            return `Create a comprehensive analysis of ${input.caseName} that covers all aspects of the case while maintaining clear organization and accessibility for legal professionals and students alike.`;
+            return `Create a comprehensive analysis of ${input.title} that covers all aspects of the case while maintaining clear organization and accessibility for legal professionals and students alike.`;
         },
     }
 };
@@ -164,9 +164,9 @@ export function getCaseSummaryPrompt(
         case 'outline':
             return caseSummaryPrompts.outline(args[0], provider);
         case 'section':
-            return caseSummaryPrompts.section(...args);
+            return caseSummaryPrompts.section(args[0], args[1], args[2], args[3], args[4]);
         case 'refinement':
-            return caseSummaryPrompts.refinement(...args);
+            return caseSummaryPrompts.refinement(args[0], args[1]);
         default:
             throw new Error(`Unknown prompt type: ${type}`);
     }

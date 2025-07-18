@@ -8,7 +8,7 @@ export function useSocket() {
     const { status } = useSession();
     const [isConnected, setIsConnected] = useState(false);
     const [connectionError, setConnectionError] = useState<string | null>(null);
-    const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
+    const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const reconnectAttemptsRef = useRef(0);
 
     useEffect(() => {
@@ -55,7 +55,9 @@ export function useSocket() {
                 reconnectAttemptsRef.current++;
                 const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000);
 
-                clearTimeout(reconnectTimeoutRef.current);
+                if (reconnectTimeoutRef.current) {
+                    clearTimeout(reconnectTimeoutRef.current);
+                }
                 reconnectTimeoutRef.current = setTimeout(() => {
                     socketInstance?.connect();
                 }, delay);
@@ -72,7 +74,9 @@ export function useSocket() {
         const socket = initSocket();
 
         return () => {
-            clearTimeout(reconnectTimeoutRef.current);
+            if (reconnectTimeoutRef.current) {
+                clearTimeout(reconnectTimeoutRef.current);
+            }
         };
     }, [status]);
 

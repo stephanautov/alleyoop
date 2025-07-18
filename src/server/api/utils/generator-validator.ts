@@ -111,10 +111,11 @@ async function validateComponent(
   result: ValidationResult,
 ): Promise<void> {
   // Check naming conventions
-  if (name[0] !== name[0].toUpperCase()) {
+  const firstChar = name.charAt(0);
+  if (firstChar && firstChar !== firstChar.toUpperCase()) {
     result.warnings.push("Component names should start with uppercase letter");
     result.suggestions.push(
-      `Consider renaming to ${name[0].toUpperCase() + name.slice(1)}`,
+      `Consider renaming to ${firstChar.toUpperCase() + name.slice(1)}`,
     );
   }
 

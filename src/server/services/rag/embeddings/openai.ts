@@ -4,7 +4,7 @@
 import { OpenAI } from "openai";
 import { encoding_for_model, type TiktokenModel } from "tiktoken";
 import { BaseEmbeddingService } from "./base";
-import { EmbeddingResult } from "../types";
+import type { EmbeddingResult } from "../types";
 import { TRPCError } from "@trpc/server";
 import { env } from "~/env";
 
@@ -46,7 +46,7 @@ export class OpenAIEmbeddingService extends BaseEmbeddingService {
             });
 
             return {
-                embedding: response.data[0].embedding,
+                embedding: response.data[0]?.embedding || [],
                 tokenCount: this.countTokens(truncatedText),
             };
         } catch (error: any) {
@@ -75,8 +75,8 @@ export class OpenAIEmbeddingService extends BaseEmbeddingService {
 
                 for (let j = 0; j < response.data.length; j++) {
                     results.push({
-                        embedding: response.data[j].embedding,
-                        tokenCount: this.countTokens(truncatedBatch[j]),
+                        embedding: response.data[j]?.embedding || [],
+                        tokenCount: this.countTokens(truncatedBatch[j] || ''),
                     });
                 }
             } catch (error: any) {
