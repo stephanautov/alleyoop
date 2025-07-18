@@ -1,11 +1,13 @@
-// src/server/services/cache/index.ts
+// src/server/services/cache/index.ts (Updated for Prisma compatibility)
 
 import { Redis } from 'ioredis';
 import { createHash } from 'crypto';
-import { z } from 'zod';
 import { DocumentType } from '@prisma/client';
+import type { CacheEntry as PrismaCacheEntry } from '@prisma/client';
+import type { CacheEntry } from '@prisma/client';
 import { env } from '~/env';
 import { db } from '~/server/db';
+
 
 // Cache configuration by document type (TTL in seconds)
 export const CACHE_TTL: Record<DocumentType, number> = {
@@ -22,26 +24,8 @@ export enum CacheType {
     SECTION = 'section',
     EMBEDDING = 'embedding',
     DOCUMENT = 'document',
+    GENERIC = 'generic',
 }
-
-// Cache entry schema
-const cacheEntrySchema = z.object({
-    key: z.string(),
-    type: z.nativeEnum(CacheType),
-    provider: z.string(),
-    model: z.string(),
-    value: z.any(),
-    inputHash: z.string(),
-    documentType: z.nativeEnum(DocumentType).optional(),
-    hits: z.number().default(0),
-    lastHit: z.string().optional(),
-    costSaved: z.number().default(0),
-    createdAt: z.string(),
-    expiresAt: z.string(),
-    metadata: z.record(z.any()).optional(),
-});
-
-export type CacheEntry = z.infer<typeof cacheEntrySchema>;
 
 export interface CacheOptions {
     forceRefresh?: boolean;
@@ -101,6 +85,278 @@ export class CacheService {
         }
 
         return keyParts.join(':');
+    }
+
+    /**
+     * Get a cached value
+     */
+    async get<T = any>(
+        key: string,
+        options: CacheOptions = {}
+    ): Promise<{ value: T; metadata: CacheEntry } | null> {
+        if (options.forceRefresh) {
+            return null;
+        }
+
+        try {
+            // First check Redis
+            const cached = await this.redis.get(key);
+
+            if (!cached) {
+                return null;
+            }
+
+            const value = JSON.parse(cached);
+
+            // Get metadata from database
+            const entry = await db.cacheEntry.findUnique({
+                where: { key },
+            });
+
+            if (!entry) {
+                // Redis has data but DB doesn't - shouldn't happen but handle gracefully
+                return null;
+            }
+
+            // Check if expired
+            if (new Date(entry.expiresAt) < new Date()) {
+                await this.delete(key);
+                return null;
+            }
+
+            // Update hit count and last hit time
+            await db.cacheEntry.update({
+                where: { key },
+                data: {
+                    hits: { increment: 1 },
+                    lastHit: new Date(),
+                },
+            });
+
+            return {
+                value: value as T,
+                metadata: entry,
+            };
+        } catch (error) {
+            console.error('Cache get error:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Set a cached value
+     */
+    async set<T = any>(params: {
+        key: string;
+        value: T;
+        type: CacheType;
+        documentType?: DocumentType;
+        provider: string;
+        model: string;
+        inputHash: string;
+        ttl?: number;
+        cost?: number;
+        metadata?: Record<string, any>;
+        userId?: string;
+        documentId?: string;
+    }): Promise<void> {
+        try {
+            const ttl = params.ttl ||
+                (params.documentType ? CACHE_TTL[params.documentType] : 3600);
+
+            // Store in Redis
+            await this.redis.setex(
+                params.key,
+                ttl,
+                JSON.stringify(params.value)
+            );
+
+            // Store metadata in database
+            await db.cacheEntry.upsert({
+                where: { key: params.key },
+                create: {
+                    key: params.key,
+                    type: params.type,
+                    value: params.value as any, // Store value in DB too for analytics
+                    provider: params.provider,
+                    model: params.model,
+                    inputHash: params.inputHash,
+                    hits: 0,
+                    costSaved: params.cost || 0,
+                    userId: params.userId,
+                    documentType: params.documentType,
+                    documentId: params.documentId,
+                    expiresAt: new Date(Date.now() + ttl * 1000),
+                    metadata: params.metadata,
+                },
+                update: {
+                    value: params.value as any,
+                    expiresAt: new Date(Date.now() + ttl * 1000),
+                    // Don't reset hits or costSaved on update
+                },
+            });
+        } catch (error) {
+            console.error('Cache set error:', error);
+            // Don't throw - caching errors shouldn't break the application
+        }
+    }
+
+    /**
+     * Delete a cached value
+     */
+    async delete(key: string): Promise<void> {
+        try {
+            await this.redis.del(key);
+            await db.cacheEntry.delete({
+                where: { key },
+            }).catch(() => {
+                // Ignore if doesn't exist in DB
+            });
+        } catch (error) {
+            console.error('Cache delete error:', error);
+        }
+    }
+
+    /**
+     * Clear cache by pattern
+     */
+    async clearByPattern(pattern: string): Promise<number> {
+        try {
+            const keys = await this.redis.keys(`${this.prefix}${pattern}*`);
+
+            if (keys.length === 0) {
+                return 0;
+            }
+
+            // Delete from Redis
+            await this.redis.del(...keys);
+
+            // Delete from database
+            await db.cacheEntry.deleteMany({
+                where: {
+                    key: { in: keys },
+                },
+            });
+
+            return keys.length;
+        } catch (error) {
+            console.error('Cache clear error:', error);
+            return 0;
+        }
+    }
+
+    /**
+     * Clear all cache for a specific document type
+     */
+    async clearByDocumentType(documentType: DocumentType): Promise<number> {
+
+        if (!documentType) {
+            return 0;
+        }
+        // Clear from Redis by pattern
+        const cleared = await this.clearByPattern(`*:${documentType}:*`);
+
+        // Also clear from database
+        await db.cacheEntry.deleteMany({
+            where: { documentType },
+        });
+
+        return cleared;
+    }
+
+    /**
+     * Clear all cache for a specific provider
+     */
+    async clearByProvider(provider: string): Promise<number> {
+        // Get all keys for this provider from DB
+        const entries = await db.cacheEntry.findMany({
+            where: { provider },
+            select: { key: true },
+        });
+
+        const keys = entries.map(e => e.key);
+
+        if (keys.length > 0) {
+            // Delete from Redis
+            await this.redis.del(...keys);
+
+            // Delete from database
+            await db.cacheEntry.deleteMany({
+                where: { provider },
+            });
+        }
+
+        return keys.length;
+    }
+
+    /**
+     * Get cache statistics
+     */
+    async getStats(): Promise<{
+        totalEntries: number;
+        memoryUsage: number;
+        hitRate: number;
+        costSaved: number;
+    }> {
+        try {
+            const info = await this.redis.info('memory');
+            const memoryMatch = info.match(/used_memory:(\d+)/);
+            const memoryUsage = parseInt(memoryMatch?.[1] ?? '0', 10);
+
+            // Get stats from database
+            const stats = await db.cacheEntry.aggregate({
+                _sum: {
+                    hits: true,
+                    costSaved: true,
+                },
+                _count: {
+                    _all: true,
+                },
+            });
+
+            const totalHits = stats._sum.hits || 0;
+            const totalRequests = await db.cacheEntry.count();
+            const entriesWithHits = await db.cacheEntry.count({
+                where: { hits: { gt: 0 } },
+            });
+
+            const hitRate = totalRequests > 0 ? entriesWithHits / totalRequests : 0;
+
+            return {
+                totalEntries: await this.redis.dbsize(),
+                memoryUsage,
+                hitRate,
+                costSaved: stats._sum.costSaved || 0,
+            };
+        } catch (error) {
+            console.error('Error getting cache stats:', error);
+            return {
+                totalEntries: 0,
+                memoryUsage: 0,
+                hitRate: 0,
+                costSaved: 0,
+            };
+        }
+    }
+
+    /**
+     * Check cache health
+     */
+    async healthCheck(): Promise<boolean> {
+        try {
+            await this.redis.ping();
+            return true;
+        } catch (error) {
+            console.error('Cache health check failed:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Close Redis connection
+     */
+    async close(): Promise<void> {
+        await this.redis.quit();
     }
 
     /**
@@ -165,253 +421,6 @@ export class CacheService {
     private hashInput(input: any): string {
         const jsonString = JSON.stringify(input);
         return createHash('sha256').update(jsonString).digest('hex').substring(0, 16);
-    }
-
-    /**
-     * Get a cached value
-     */
-    async get<T = any>(
-        key: string,
-        options: CacheOptions = {}
-    ): Promise<{ value: T; metadata: CacheEntry } | null> {
-        if (options.forceRefresh) {
-            return null;
-        }
-
-        try {
-            const cached = await this.redis.get(key);
-
-            if (!cached) {
-                return null;
-            }
-
-            const entry = cacheEntrySchema.parse(JSON.parse(cached));
-
-            // Check if expired
-            if (new Date(entry.expiresAt) < new Date()) {
-                await this.delete(key);
-                return null;
-            }
-
-            // Update hit count and last hit time
-            entry.hits += 1;
-            entry.lastHit = new Date().toISOString();
-
-            // Update in Redis
-            await this.redis.set(key, JSON.stringify(entry));
-
-            // Track hit in database if we have enough information
-            if (entry.metadata?.documentId) {
-                await this.trackCacheHit(entry);
-            }
-
-            return {
-                value: entry.value as T,
-                metadata: entry,
-            };
-        } catch (error) {
-            console.error('Cache get error:', error);
-            return null;
-        }
-    }
-
-    /**
-     * Set a cached value
-     */
-    async set<T = any>(params: {
-        key: string;
-        value: T;
-        type: CacheType;
-        documentType?: DocumentType;
-        provider: string;
-        model: string;
-        inputHash: string;
-        ttl?: number;
-        cost?: number;
-        metadata?: Record<string, any>;
-    }): Promise<void> {
-        try {
-            const ttl = params.ttl ||
-                (params.documentType ? CACHE_TTL[params.documentType] : 3600);
-
-            const entry: CacheEntry = {
-                key: params.key,
-                type: params.type,
-                provider: params.provider,
-                model: params.model,
-                value: params.value,
-                inputHash: params.inputHash,
-                documentType: params.documentType,
-                hits: 0,
-                costSaved: params.cost || 0,
-                createdAt: new Date().toISOString(),
-                expiresAt: new Date(Date.now() + ttl * 1000).toISOString(),
-                metadata: params.metadata,
-            };
-
-            await this.redis.setex(
-                params.key,
-                ttl,
-                JSON.stringify(entry)
-            );
-
-            // Store in database for analytics
-            await this.saveCacheEntry(entry);
-        } catch (error) {
-            console.error('Cache set error:', error);
-            // Don't throw - caching errors shouldn't break the application
-        }
-    }
-
-    /**
-     * Delete a cached value
-     */
-    async delete(key: string): Promise<void> {
-        try {
-            await this.redis.del(key);
-        } catch (error) {
-            console.error('Cache delete error:', error);
-        }
-    }
-
-    /**
-     * Clear cache by pattern
-     */
-    async clearByPattern(pattern: string): Promise<number> {
-        try {
-            const keys = await this.redis.keys(`${this.prefix}${pattern}*`);
-
-            if (keys.length === 0) {
-                return 0;
-            }
-
-            await this.redis.del(...keys);
-            return keys.length;
-        } catch (error) {
-            console.error('Cache clear error:', error);
-            return 0;
-        }
-    }
-
-    /**
-     * Clear all cache for a specific document type
-     */
-    async clearByDocumentType(documentType: DocumentType): Promise<number> {
-        return this.clearByPattern(`*:${documentType}:*`);
-    }
-
-    /**
-     * Clear all cache for a specific provider
-     */
-    async clearByProvider(provider: string): Promise<number> {
-        return this.clearByPattern(`*:${provider}:*`);
-    }
-
-    /**
-     * Get cache statistics
-     */
-    async getStats(): Promise<{
-        totalEntries: number;
-        memoryUsage: number;
-        hitRate: number;
-        costSaved: number;
-    }> {
-        try {
-            const info = await this.redis.info('memory');
-            const memoryMatch = info.match(/used_memory:(\d+)/);
-            const memoryUsage = memoryMatch ? parseInt(memoryMatch[1]) : 0;
-
-            // Get stats from database
-            const stats = await db.cacheEntry.aggregate({
-                _sum: {
-                    hits: true,
-                    costSaved: true,
-                },
-                _count: {
-                    _all: true,
-                },
-            });
-
-            const totalHits = stats._sum.hits || 0;
-            const totalRequests = await db.cacheEntry.count();
-            const hitRate = totalRequests > 0 ? totalHits / totalRequests : 0;
-
-            return {
-                totalEntries: await this.redis.dbsize(),
-                memoryUsage,
-                hitRate,
-                costSaved: stats._sum.costSaved || 0,
-            };
-        } catch (error) {
-            console.error('Error getting cache stats:', error);
-            return {
-                totalEntries: 0,
-                memoryUsage: 0,
-                hitRate: 0,
-                costSaved: 0,
-            };
-        }
-    }
-
-    /**
-     * Check cache health
-     */
-    async healthCheck(): Promise<boolean> {
-        try {
-            await this.redis.ping();
-            return true;
-        } catch (error) {
-            console.error('Cache health check failed:', error);
-            return false;
-        }
-    }
-
-    /**
-     * Close Redis connection
-     */
-    async close(): Promise<void> {
-        await this.redis.quit();
-    }
-
-    /**
-     * Save cache entry to database for analytics
-     */
-    private async saveCacheEntry(entry: CacheEntry): Promise<void> {
-        try {
-            await db.cacheEntry.create({
-                data: {
-                    key: entry.key,
-                    type: entry.type,
-                    provider: entry.provider,
-                    model: entry.model,
-                    value: entry.value,
-                    inputHash: entry.inputHash,
-                    expiresAt: new Date(entry.expiresAt),
-                    metadata: entry.metadata,
-                },
-            });
-        } catch (error) {
-            // Log but don't throw - database tracking is secondary
-            console.error('Failed to save cache entry to database:', error);
-        }
-    }
-
-    /**
-     * Track cache hit in database
-     */
-    private async trackCacheHit(entry: CacheEntry): Promise<void> {
-        try {
-            await db.cacheEntry.updateMany({
-                where: { key: entry.key },
-                data: {
-                    hits: { increment: 1 },
-                    lastHit: new Date(),
-                    costSaved: { increment: entry.costSaved },
-                },
-            });
-        } catch (error) {
-            console.error('Failed to track cache hit:', error);
-        }
     }
 }
 

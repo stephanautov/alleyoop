@@ -7,6 +7,11 @@ export interface ProgressEventData {
     progress: number;
     message?: string;
     phase?: string;
+    stage?: string;
+    documentId?: string;
+    estimatedTimeRemaining?: number;
+    currentSection?: string;
+    metadata?: Record<string, any>;
 }
 
 export interface SectionData {

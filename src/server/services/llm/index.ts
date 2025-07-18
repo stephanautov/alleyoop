@@ -426,6 +426,59 @@ export class LLMService {
     };
   }
 
+  async generate(params: {
+    type: DocumentType;
+    input: any;
+    userId?: string;
+    documentId?: string;
+    onProgress?: (progress: GenerationProgress) => void;
+  }): Promise<{
+    documentId?: string;
+    content: string;
+    outline: any;
+    sections: Record<string, string>;
+    tokenUsage?: { prompt: number; completion: number; total: number };
+    cost?: number;
+  }> {
+    const { type, input, userId, documentId, onProgress } = params;
+
+    // 1. Generate outline
+    const outline = await this.generateOutline({
+      type,
+      input,
+      userId,
+      documentId,
+      onProgress,
+    });
+
+    // 2. Generate sections based on outline
+    const sections = await this.generateSections({
+      outline,
+      type,
+      input,
+      userId,
+      documentId,
+      onProgress,
+    });
+
+    // 3. Refine the document for better flow
+    const { content } = await this.refineDocument({
+      sections,
+      type,
+      requirements: input?.requirements || {},
+      userId,
+      documentId,
+    });
+
+    // NOTE: Detailed token usage / cost tracking is handled by provider-specific calls inside the previous methods.
+    return {
+      documentId,
+      content,
+      outline,
+      sections,
+    };
+  }
+
   async estimateCost(input: any): Promise<{
     estimatedTokens: number;
     estimatedCost: number;

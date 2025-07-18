@@ -145,6 +145,7 @@ model Document {
   completionTokens Int         @default(0)
   totalCost        Float       @default(0)
   Embedding        Embedding[]
+  cacheEntries     CacheEntry[]
 
   @@index([userId, status])
   @@index([type])
@@ -355,22 +356,32 @@ model Embedding {
 }
 
 model CacheEntry {
-  id           String   @id @default(cuid())
-  key          String   @unique
+  id           String    @id @default(cuid())
+  key          String    @unique
+  type         String    @default("generic") // NEW: "outline" | "section" | "embedding"
   value        Json
   provider     String
   model        String
-  hits         Int      @default(0)
+  inputHash    String    @default("")       // NEW: For similarity matching
+  hits         Int       @default(0)
+  lastHit      DateTime?                     // NEW: Track last access
+  costSaved    Float     @default(0)        // NEW: Track savings
   userId       String?
-  user         User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
   documentType String?
+  documentId   String?                       // NEW: Optional document link
+  document     Document? @relation(fields: [documentId], references: [id], onDelete: SetNull) // NEW
   expiresAt    DateTime
-  createdAt    DateTime @default(now())
+  createdAt    DateTime  @default(now())
   metadata     Json?
 
   @@index([expiresAt])
   @@index([provider, model])
   @@index([userId])
+  @@index([type, provider, model])          // NEW
+  @@index([inputHash])                      // NEW
+  @@index([documentId])                     // NEW
+  @@index([createdAt])                      // NEW
 }
 
 // Enums

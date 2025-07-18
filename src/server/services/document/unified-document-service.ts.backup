@@ -213,7 +213,7 @@ export class UnifiedDocumentService {
         }
 
         // Type-safe provider access
-        const providerPrompts = (prompts as any)[provider] ?? Object.values(prompts)[0];
+        const providerPrompts = prompts[provider as keyof typeof prompts] || prompts.openai;
 
         // Apply user's system prompt style
         const systemPrompt = this.applyPromptStyle(
@@ -259,7 +259,7 @@ export class UnifiedDocumentService {
      * Check cache for existing generation
      */
     private async checkCache(config: any): Promise<GenerationResult | null> {
-        const cacheKey = this.cacheService.generateKey({
+        const cacheKey = this.cacheManager.generateKey({
             type: CacheType.DOCUMENT,
             documentType: config.documentType,
             input: config.input,
@@ -364,13 +364,11 @@ export class UnifiedDocumentService {
                 temperature: config.temperature,
                 maxTokens: config.maxTokens,
                 // Use ragContext instead of ragEnabled
-                ragContext: config.useRAG
-                    ? {
-                        enabled: true,
-                        threshold: config.ragThreshold,
-                        settings: {},
-                    }
-                    : undefined,
+                ragContext: config.useRAG ? {
+                    enabled: true,
+                    threshold: config.ragThreshold,
+                    settings: {}
+                } : null,
                 // Don't use metadata field - store in appropriate fields
             },
         });
@@ -478,7 +476,7 @@ export class UnifiedDocumentService {
      * Cache successful generation
      */
     private async cacheResult(config: any, result: any): Promise<void> {
-        const cacheKey = this.cacheService.generateKey({
+        const cacheKey = this.cacheManager.generateKey({
             type: CacheType.DOCUMENT,
             documentType: config.documentType,
             input: config.input,
