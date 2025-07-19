@@ -1,3 +1,5 @@
+'use client';
+
 // src/app/settings/preferences/components/cost-limits.tsx
 
 import { useState } from "react";

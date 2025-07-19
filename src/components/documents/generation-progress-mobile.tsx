@@ -1,3 +1,5 @@
+'use client';
+
 // src/components/documents/generation-progress-mobile.tsx
 
 import { useState, useEffect } from 'react';

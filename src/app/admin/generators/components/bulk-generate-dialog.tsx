@@ -1,3 +1,5 @@
+'use client';
+
 // src/app/admin/generators/components/bulk-generate-dialog.tsx
 
 import { useState } from "react";

@@ -1,3 +1,5 @@
+'use client';
+
 // src/components/documents/generation-progress.tsx
 
 import { useEffect, useState } from 'react';
