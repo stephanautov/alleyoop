@@ -51,7 +51,6 @@ export class NotificationService {
                 icon: '/icon-192x192.png',
                 badge: '/icon-72x72.png',
                 tag: 'docuforge-generation',
-                renotify: true,
                 ...options,
             });
 
@@ -70,14 +69,12 @@ export class NotificationService {
     showDocumentComplete(documentTitle: string) {
         this.showNotification('Document Generated!', {
             body: `${documentTitle} has been generated successfully.`,
-            vibrate: [200, 100, 200],
         });
     }
 
     showDocumentError(documentTitle: string) {
         this.showNotification('Generation Failed', {
             body: `Failed to generate ${documentTitle}. Click to retry.`,
-            vibrate: [300],
         });
     }
 }

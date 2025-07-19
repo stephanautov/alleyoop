@@ -10,9 +10,13 @@ export const env = createEnv({
    */
   server: {
     // Database
+    // Accept postgres:// or postgresql:// instead of limiting to http/https
     DATABASE_URL: z
       .string()
-      .url()
+      .refine(
+        (str) => /^postgres(ql)?:\/\//.test(str),
+        "DATABASE_URL must start with postgres:// or postgresql://"
+      )
       .refine(
         (str) => !str.includes("YOUR_POSTGRES_URL_HERE"),
         "You forgot to change the default URL"
@@ -28,8 +32,12 @@ export const env = createEnv({
       process.env.NODE_ENV === "production"
         ? z.string()
         : z.string().optional(),
+    // Use VERCEL_URL when set (non-empty); otherwise fallback to the provided value
     NEXTAUTH_URL: z.preprocess(
-      (str) => process.env.VERCEL_URL ?? str,
+      (str) => {
+        const vercelUrl = process.env.VERCEL_URL;
+        return vercelUrl && vercelUrl.length > 0 ? vercelUrl : str;
+      },
       process.env.VERCEL ? z.string() : z.string().url()
     ),
     AUTH_SECRET: z.string().optional(),
@@ -41,7 +49,9 @@ export const env = createEnv({
     AUTH_DISCORD_SECRET: z.string().optional(),
 
     // Redis
-    REDIS_URL: z.string().url(),
+    REDIS_URL: z
+      .string()
+      .refine((str) => /^redis:\/\//.test(str), "REDIS_URL must start with redis://"),
 
     // OpenAI
     OPENAI_API_KEY: z.string().min(1),

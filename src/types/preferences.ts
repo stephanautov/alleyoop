@@ -1,4 +1,6 @@
 // src/types/preferences.ts
+import { DocumentType } from "@prisma/client";
+import { type ProviderName } from "../server/services/llm/index";
 
 export interface UserPreferences {
     id: string;
