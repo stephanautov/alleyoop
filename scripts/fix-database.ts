@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+<<<<<<< HEAD
 // scripts/fix-database.ts
 // Run with: npx tsx scripts/fix-database.ts
 
@@ -6,10 +7,17 @@ import { PrismaClient } from '@prisma/client';
 import { execSync } from 'child_process';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+=======
+import { PrismaClient } from "@prisma/client";
+import { execSync } from "child_process";
+import * as fs from "fs/promises";
+import * as path from "path";
+>>>>>>> 274f729c831bd20c718b4330ccf805c6875e082e
 
 const prisma = new PrismaClient();
 
 async function main() {
+<<<<<<< HEAD
   console.log('🔧 Starting DocuForge database fixes...\n');
 
   try {
@@ -41,6 +49,30 @@ async function main() {
 
   } catch (error) {
     console.error('❌ Error during database fixes:', error);
+=======
+  console.log("🔧 Starting DocuForge database fixes...\n");
+
+  try {
+    // Update Prisma Schema
+    console.log("📝 Updating Prisma schema...");
+    await updatePrismaSchema();
+
+    // Generate Prisma Client
+    console.log("\n🏗️  Generating Prisma client...");
+    execSync("npx prisma generate", { stdio: "inherit" });
+
+    // Push schema changes
+    console.log("\n🚀 Pushing schema changes to database...");
+    execSync("npx prisma db push --skip-generate", { stdio: "inherit" });
+
+    // Run custom migrations
+    console.log("\n🔄 Running custom SQL migrations...");
+    await runCustomMigrations();
+
+    console.log("\n✅ Database fixes completed successfully!");
+  } catch (error) {
+    console.error("❌ Error during database fixes:", error);
+>>>>>>> 274f729c831bd20c718b4330ccf805c6875e082e
     process.exit(1);
   } finally {
     await prisma.$disconnect();
@@ -48,6 +80,7 @@ async function main() {
 }
 
 async function updatePrismaSchema() {
+<<<<<<< HEAD
   const schemaPath = path.join(process.cwd(), 'prisma', 'schema.prisma');
   let content = await fs.readFile(schemaPath, 'utf-8');
 
@@ -99,6 +132,21 @@ async function updatePrismaSchema() {
 
   // Add new models if they don't exist
   const newModels = [
+=======
+  const schemaPath = path.join(process.cwd(), "prisma", "schema.prisma");
+  let content = await fs.readFile(schemaPath, "utf-8");
+
+  // Add role to User model
+  if (!content.includes('role          String     @default("USER")')) {
+    content = content.replace(
+      /updatedAt     DateTime   @updatedAt/,
+      'updatedAt     DateTime   @updatedAt\n  role          String     @default("USER")',
+    );
+  }
+
+  // Add missing models
+  const modelsToAdd = [
+>>>>>>> 274f729c831bd20c718b4330ccf805c6875e082e
     `
 model GeneratorMetrics {
   id              String       @id @default(cuid())
@@ -130,6 +178,7 @@ model GeneratorError {
   @@index([userId])
   @@index([generator])
 }`,
+<<<<<<< HEAD
     `
 model LLMCall {
   id              String       @id @default(cuid())
@@ -245,20 +294,53 @@ async function runCustomMigrations() {
     `CREATE INDEX IF NOT EXISTS "Document_provider_idx" ON "Document"("provider");`,
     `CREATE INDEX IF NOT EXISTS "LLMCall_provider_idx" ON "LLMCall"("provider");`,
     `CREATE INDEX IF NOT EXISTS "GeneratorHistory_sessionId_idx" ON "GeneratorHistory"("sessionId");`,
+=======
+  ];
+
+  for (const model of modelsToAdd) {
+    const modelName = model.match(/model (\w+)/)?.[1];
+    if (modelName && !content.includes(`model ${modelName}`)) {
+      content += "\n" + model;
+    }
+  }
+
+  // Update User relations
+  if (!content.includes("generatorMetrics  GeneratorMetrics[]")) {
+    content = content.replace(
+      /generatorTemplates GeneratorTemplate\[\]/,
+      "generatorTemplates GeneratorTemplate[]\n  generatorMetrics  GeneratorMetrics[]\n  generatorErrors   GeneratorError[]",
+    );
+  }
+
+  await fs.writeFile(schemaPath, content);
+  console.log("✓ Prisma schema updated");
+}
+
+async function runCustomMigrations() {
+  const migrations = [
+    `UPDATE "User" SET "role" = 'USER' WHERE "role" IS NULL;`,
+>>>>>>> 274f729c831bd20c718b4330ccf805c6875e082e
   ];
 
   for (const migration of migrations) {
     try {
       await prisma.$executeRawUnsafe(migration);
+<<<<<<< HEAD
       console.log(`✓ Migration executed: ${migration.substring(0, 50)}...`);
     } catch (error: any) {
       if (!error.message.includes('already exists')) {
+=======
+      console.log(`✓ Migration executed`);
+    } catch (error: any) {
+      if (!error.message.includes("already exists")) {
+>>>>>>> 274f729c831bd20c718b4330ccf805c6875e082e
         console.warn(`⚠️  Migration warning: ${error.message}`);
       }
     }
   }
 }
 
+<<<<<<< HEAD
 async function seedInitialData() {
   // Check if we need to add any initial admin user or data
   const userCount = await prisma.user.count();
@@ -286,3 +368,6 @@ main().catch((error) => {
   console.error('Fatal error:', error);
   process.exit(1);
 });
+=======
+main().catch(console.error);
+>>>>>>> 274f729c831bd20c718b4330ccf805c6875e082e

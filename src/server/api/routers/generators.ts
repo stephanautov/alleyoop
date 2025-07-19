@@ -1,7 +1,11 @@
 // src/server/api/routers/generators.ts
 
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure, adminProcedure } from "~/server/api/trpc";
+import {
+  createTRPCRouter,
+  protectedProcedure,
+  adminProcedure,
+} from "~/server/api/trpc";
 import { TRPCError } from "@trpc/server";
 import { spawn } from "child_process";
 import path from "path";
@@ -57,14 +61,14 @@ async function trackGeneratedFile(
   sessionId: string,
   generator: string,
   filePath: string,
-  content: string
+  content: string,
 ) {
   const info: GeneratedFileInfo = {
     path: filePath,
     content,
     timestamp: new Date(),
     generator,
-    sessionId
+    sessionId,
   };
 
   if (!generatedFilesStore.has(sessionId)) {
@@ -80,7 +84,7 @@ async function trackGeneratedFile(
       filePath,
       content,
       userId: "current-user-id", // Get from context
-    }
+    },
   });
 }
 
@@ -89,13 +93,18 @@ async function runGeneratorWithStream(
   command: string,
   args: string[],
   sessionId: string,
-  preview: boolean = false
+  preview: boolean = false,
 ): Promise<void> {
-  const scriptPath = path.join(process.cwd(), "scripts", "generate", "index.ts");
+  const scriptPath = path.join(
+    process.cwd(),
+    "scripts",
+    "generate",
+    "index.ts",
+  );
   const child = spawn("tsx", [scriptPath, command, ...args], {
     cwd: process.cwd(),
     env: { ...process.env, NODE_ENV: "development" },
-    shell: true
+    shell: true,
   });
 
   const generatedFiles: string[] = [];
@@ -107,7 +116,7 @@ async function runGeneratorWithStream(
     generatorEvents.emit(sessionId, {
       type: "log",
       message: output,
-      progress: calculateProgress(output)
+      progress: calculateProgress(output),
     });
 
     // Parse generated file paths
@@ -124,7 +133,7 @@ async function runGeneratorWithStream(
         generatorEvents.emit(sessionId, {
           type: "file",
           file: filePath,
-          content: preview ? content : undefined
+          content: preview ? content : undefined,
         });
 
         if (!preview) {
@@ -137,7 +146,7 @@ async function runGeneratorWithStream(
   child.stderr.on("data", (data) => {
     generatorEvents.emit(sessionId, {
       type: "error",
-      message: data.toString()
+      message: data.toString(),
     });
   });
 
@@ -146,13 +155,13 @@ async function runGeneratorWithStream(
       if (code !== 0) {
         generatorEvents.emit(sessionId, {
           type: "error",
-          message: "Generator failed"
+          message: "Generator failed",
         });
         reject(new Error("Generator failed"));
       } else {
         generatorEvents.emit(sessionId, {
           type: "complete",
-          message: "Generation complete"
+          message: "Generation complete",
         });
         resolve();
       }
@@ -172,9 +181,11 @@ function calculateProgress(output: string): number {
 export const generatorsRouter = createTRPCRouter({
   // Stream generator output
   streamGeneration: protectedProcedure
-    .input(z.object({
-      sessionId: z.string()
-    }))
+    .input(
+      z.object({
+        sessionId: z.string(),
+      }),
+    )
     .subscription(({ input }) => {
       return observable<GeneratorOutput>((emit) => {
         const handler = (data: GeneratorOutput) => {
@@ -191,22 +202,28 @@ export const generatorsRouter = createTRPCRouter({
 
   // Generate with preview
   generateRouterWithPreview: adminProcedure
-    .input(z.object({
-      name: z.string().min(1),
-      model: z.string().optional(),
-      crud: z.boolean().default(true),
-      preview: z.boolean().default(false)
-    }))
+    .input(
+      z.object({
+        name: z.string().min(1),
+        model: z.string().optional(),
+        crud: z.boolean().default(true),
+        preview: z.boolean().default(false),
+      }),
+    )
     .mutation(async ({ input, ctx }) => {
       const sessionId = crypto.randomUUID();
 
       try {
         // Validate files don't exist
-        const routerPath = path.join(process.cwd(), "src/server/api/routers", `${input.name}.ts`);
-        if (await fileExists(routerPath) && !input.preview) {
+        const routerPath = path.join(
+          process.cwd(),
+          "src/server/api/routers",
+          `${input.name}.ts`,
+        );
+        if ((await fileExists(routerPath)) && !input.preview) {
           throw new TRPCError({
             code: "CONFLICT",
-            message: `Router ${input.name} already exists`
+            message: `Router ${input.name} already exists`,
           });
         }
 
@@ -220,35 +237,42 @@ export const generatorsRouter = createTRPCRouter({
         return {
           success: true,
           sessionId,
-          files: generatedFilesStore.get(sessionId)?.map(f => f.path) || []
+          files: generatedFilesStore.get(sessionId)?.map((f) => f.path) || [],
         };
       } catch (error) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: error instanceof Error ? error.message : "Failed to generate router"
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to generate router",
         });
       }
     }),
 
   // Get generated files for preview
   getGeneratedFiles: protectedProcedure
-    .input(z.object({
-      sessionId: z.string()
-    }))
+    .input(
+      z.object({
+        sessionId: z.string(),
+      }),
+    )
     .query(async ({ input }) => {
       const files = generatedFilesStore.get(input.sessionId) || [];
-      return files.map(f => ({
+      return files.map((f) => ({
         path: f.path,
         content: f.content,
-        language: getLanguageFromPath(f.path)
+        language: getLanguageFromPath(f.path),
       }));
     }),
 
   // Undo generation
   undoGeneration: adminProcedure
-    .input(z.object({
-      sessionId: z.string()
-    }))
+    .input(
+      z.object({
+        sessionId: z.string(),
+      }),
+    )
     .mutation(async ({ input, ctx }) => {
       const files = generatedFilesStore.get(input.sessionId) || [];
       const errors: string[] = [];
@@ -287,7 +311,7 @@ export const generatorsRouter = createTRPCRouter({
       // Update database
       await db.generatorHistory.updateMany({
         where: { sessionId: input.sessionId },
-        data: { deletedAt: new Date() }
+        data: { deletedAt: new Date() },
       });
 
       generatedFilesStore.delete(input.sessionId);
@@ -295,18 +319,20 @@ export const generatorsRouter = createTRPCRouter({
       return {
         success: errors.length === 0,
         deleted,
-        errors
+        errors,
       };
     }),
 
   // Save template
   saveTemplate: protectedProcedure
-    .input(z.object({
-      name: z.string().min(1),
-      description: z.string().optional(),
-      generator: z.string(),
-      config: z.record(z.any())
-    }))
+    .input(
+      z.object({
+        name: z.string().min(1),
+        description: z.string().optional(),
+        generator: z.string(),
+        config: z.record(z.any()),
+      }),
+    )
     .mutation(async ({ input, ctx }) => {
       const template = await db.generatorTemplate.create({
         data: {
@@ -314,8 +340,8 @@ export const generatorsRouter = createTRPCRouter({
           description: input.description,
           generator: input.generator,
           config: input.config,
-          userId: ctx.session.user.id
-        }
+          userId: ctx.session.user.id,
+        },
       });
 
       return template;
@@ -323,16 +349,18 @@ export const generatorsRouter = createTRPCRouter({
 
   // List templates
   listTemplates: protectedProcedure
-    .input(z.object({
-      generator: z.string().optional()
-    }))
+    .input(
+      z.object({
+        generator: z.string().optional(),
+      }),
+    )
     .query(async ({ input, ctx }) => {
       const templates = await db.generatorTemplate.findMany({
         where: {
           userId: ctx.session.user.id,
-          generator: input.generator
+          generator: input.generator,
         },
-        orderBy: { createdAt: "desc" }
+        orderBy: { createdAt: "desc" },
       });
 
       return templates;
@@ -340,14 +368,16 @@ export const generatorsRouter = createTRPCRouter({
 
   // Get generation history
   getHistory: protectedProcedure
-    .input(z.object({
-      limit: z.number().default(10)
-    }))
+    .input(
+      z.object({
+        limit: z.number().default(10),
+      }),
+    )
     .query(async ({ input, ctx }) => {
       const history = await db.generatorHistory.findMany({
         where: {
           userId: ctx.session.user.id,
-          deletedAt: null
+          deletedAt: null,
         },
         orderBy: { createdAt: "desc" },
         take: input.limit,
@@ -355,41 +385,43 @@ export const generatorsRouter = createTRPCRouter({
           sessionId: true,
           generator: true,
           filePath: true,
-          createdAt: true
-        }
+          createdAt: true,
+        },
       });
 
       // Group by session
-      const sessions = history.reduce((acc, item) => {
-        if (!acc[item.sessionId]) {
-          acc[item.sessionId] = {
-            sessionId: item.sessionId,
-            generator: item.generator,
-            createdAt: item.createdAt,
-            files: []
-          };
-        }
-        acc[item.sessionId].files.push(item.filePath);
-        return acc;
-      }, {} as Record<string, any>);
+      const sessions = history.reduce(
+        (acc, item) => {
+          if (!acc[item.sessionId]) {
+            acc[item.sessionId] = {
+              sessionId: item.sessionId,
+              generator: item.generator,
+              createdAt: item.createdAt,
+              files: [],
+            };
+          }
+          acc[item.sessionId].files.push(item.filePath);
+          return acc;
+        },
+        {} as Record<string, any>,
+      );
 
       return Object.values(sessions);
     }),
 
   // Check permissions
-  checkPermissions: protectedProcedure
-    .query(async ({ ctx }) => {
-      const user = await db.user.findUnique({
-        where: { id: ctx.session.user.id },
-        select: { role: true }
-      });
+  checkPermissions: protectedProcedure.query(async ({ ctx }) => {
+    const user = await db.user.findUnique({
+      where: { id: ctx.session.user.id },
+      select: { role: true },
+    });
 
-      return {
-        canGenerate: user?.role === "ADMIN" || user?.role === "DEVELOPER",
-        canUseTemplates: true,
-        canUndo: user?.role === "ADMIN"
-      };
-    })
+    return {
+      canGenerate: user?.role === "ADMIN" || user?.role === "DEVELOPER",
+      canUseTemplates: true,
+      canUndo: user?.role === "ADMIN",
+    };
+  }),
 });
 
 // Helper to determine language from file path
@@ -404,7 +436,7 @@ function getLanguageFromPath(filePath: string): string {
     ".md": "markdown",
     ".css": "css",
     ".scss": "scss",
-    ".html": "html"
+    ".html": "html",
   };
   return langMap[ext] || "text";
 }

@@ -163,7 +163,7 @@ export const rateLimitedProcedure = protectedProcedure.use(
     }
 
     return next();
-  }
+  },
 );
 
 /**
@@ -176,13 +176,13 @@ export const adminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
   // Get user with role from database
   const user = await ctx.db.user.findUnique({
     where: { id: ctx.session.user.id },
-    select: { role: true }
+    select: { role: true },
   });
 
   if (!user || user.role !== "ADMIN") {
     throw new TRPCError({
       code: "FORBIDDEN",
-      message: "You must be an admin to perform this action"
+      message: "You must be an admin to perform this action",
     });
   }
 
@@ -194,8 +194,8 @@ export const adminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
         ...ctx.session,
         user: {
           ...ctx.session.user,
-          role: user.role
-        }
+          role: user.role,
+        },
       },
     },
   });
@@ -207,32 +207,34 @@ export const adminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
  * This procedure allows both admins and developers to access endpoints
  * Used for code generation and development tools
  */
-export const developerProcedure = protectedProcedure.use(async ({ ctx, next }) => {
-  const user = await ctx.db.user.findUnique({
-    where: { id: ctx.session.user.id },
-    select: { role: true }
-  });
-
-  if (!user || !["ADMIN", "DEVELOPER"].includes(user.role)) {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "You must be an admin or developer to perform this action"
+export const developerProcedure = protectedProcedure.use(
+  async ({ ctx, next }) => {
+    const user = await ctx.db.user.findUnique({
+      where: { id: ctx.session.user.id },
+      select: { role: true },
     });
-  }
 
-  return next({
-    ctx: {
-      ...ctx,
-      session: {
-        ...ctx.session,
-        user: {
-          ...ctx.session.user,
-          role: user.role
-        }
+    if (!user || !["ADMIN", "DEVELOPER"].includes(user.role)) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "You must be an admin or developer to perform this action",
+      });
+    }
+
+    return next({
+      ctx: {
+        ...ctx,
+        session: {
+          ...ctx.session,
+          user: {
+            ...ctx.session.user,
+            role: user.role,
+          },
+        },
       },
-    },
-  });
-});
+    });
+  },
+);
 
 /**
  * Cached procedure
@@ -293,7 +295,7 @@ export const loggedProcedure = protectedProcedure.use(
 
       throw error;
     }
-  }
+  },
 );
 
 // Export types

@@ -12,7 +12,7 @@ import { auth } from "~/server/auth";
  * Compatible with both server components and API routes
  */
 export const getServerAuthSession = async () => {
-    return await auth();
+  return await auth();
 };
 
 // For legacy code that expects the old getServerSession name

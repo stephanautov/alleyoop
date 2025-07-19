@@ -12,21 +12,29 @@ interface FileToGenerate {
   content: string;
 }
 
-export async function generateTest(targetPath: string, options: TestOptions = {}) {
+export async function generateTest(
+  targetPath: string,
+  options: TestOptions = {},
+) {
   const testType = options.type || detectTestType(targetPath);
   const absolutePath = path.isAbsolute(targetPath)
     ? targetPath
     : path.join(process.cwd(), targetPath);
 
   // Check if target file exists (always check to provide info, but don't throw in dry-run)
-  const fileExists = await fs.access(absolutePath).then(() => true).catch(() => false);
+  const fileExists = await fs
+    .access(absolutePath)
+    .then(() => true)
+    .catch(() => false);
   if (!fileExists && !options.dryRun) {
     console.warn(`⚠️  Target file not found: ${targetPath}`);
     console.log("Generating test template anyway...");
   }
 
   // Read file content if it exists
-  const fileContent = fileExists ? await fs.readFile(absolutePath, "utf-8") : "";
+  const fileContent = fileExists
+    ? await fs.readFile(absolutePath, "utf-8")
+    : "";
   const fileInfo = parseFileInfo(targetPath, fileContent);
 
   // Collect files to generate
@@ -72,11 +80,13 @@ export async function generateTest(targetPath: string, options: TestOptions = {}
       console.log(`File size: ${file.content.length} bytes`);
 
       // Emit preview data
-      process.stdout.write(JSON.stringify({
-        type: "preview-file",
-        path: file.path,
-        content: file.content
-      }) + "\n");
+      process.stdout.write(
+        JSON.stringify({
+          type: "preview-file",
+          path: file.path,
+          content: file.content,
+        }) + "\n",
+      );
     }
 
     return;
@@ -89,7 +99,10 @@ export async function generateTest(targetPath: string, options: TestOptions = {}
     await fs.mkdir(dir, { recursive: true });
 
     // Check if test already exists
-    const testExists = await fs.access(file.path).then(() => true).catch(() => false);
+    const testExists = await fs
+      .access(file.path)
+      .then(() => true)
+      .catch(() => false);
     if (testExists) {
       console.warn(`⚠️  Test already exists: ${file.path}`);
       console.log("Overwriting existing test file...");
@@ -97,7 +110,9 @@ export async function generateTest(targetPath: string, options: TestOptions = {}
 
     // Write test file
     await fs.writeFile(file.path, file.content);
-    console.log(`✅ Generated ${testType} test: ${path.relative(process.cwd(), file.path)}`);
+    console.log(
+      `✅ Generated ${testType} test: ${path.relative(process.cwd(), file.path)}`,
+    );
   }
 }
 
@@ -130,7 +145,10 @@ function parseFileInfo(filePath: string, content: string): FileInfo {
   return {
     fileName,
     componentName,
-    isReactComponent: /import.*from ['"]react['"]/.test(content) || filePath.endsWith(".tsx") || filePath.endsWith(".jsx"),
+    isReactComponent:
+      /import.*from ['"]react['"]/.test(content) ||
+      filePath.endsWith(".tsx") ||
+      filePath.endsWith(".jsx"),
     isApiRoute: filePath.includes("/api/") || filePath.includes("/routers/"),
     isPage: filePath.includes("/app/") && fileName === "page",
     exportedFunctions: extractExportedFunctions(content),
@@ -178,11 +196,7 @@ function getIntegrationTestPath(filePath: string): string {
   const fileName = path.basename(filePath, path.extname(filePath));
   const ext = path.extname(filePath);
 
-  const integrationDir = path.join(
-    process.cwd(),
-    "tests",
-    "integration"
-  );
+  const integrationDir = path.join(process.cwd(), "tests", "integration");
 
   return path.join(integrationDir, `${fileName}.integration.test${ext}`);
 }
@@ -190,18 +204,22 @@ function getIntegrationTestPath(filePath: string): string {
 function getE2ETestPath(filePath: string): string {
   const relativePath = path.relative(
     path.join(process.cwd(), "src", "app"),
-    filePath
+    filePath,
   );
-  const testName = relativePath
-    .replace(/\/(page|layout|loading|error)\.(tsx?|jsx?)$/, "")
-    .replace(/\//g, "-") || "home";
+  const testName =
+    relativePath
+      .replace(/\/(page|layout|loading|error)\.(tsx?|jsx?)$/, "")
+      .replace(/\//g, "-") || "home";
 
   const e2eDir = path.join(process.cwd(), "tests", "e2e");
   return path.join(e2eDir, `${testName}.spec.ts`);
 }
 
 // Test generation functions remain the same
-async function generateUnitTest(fileInfo: FileInfo, fileContent: string): Promise<string> {
+async function generateUnitTest(
+  fileInfo: FileInfo,
+  fileContent: string,
+): Promise<string> {
   if (fileInfo.isReactComponent) {
     return generateReactComponentTest(fileInfo);
   }
@@ -514,7 +532,9 @@ function generateFunctionTest(fileInfo: FileInfo): string {
   return `import { ${fileInfo.exportedFunctions.join(", ")} } from "./${fileInfo.fileName}";
 
 describe("${fileInfo.fileName}", () => {
-  ${fileInfo.exportedFunctions.map(funcName => `
+  ${fileInfo.exportedFunctions
+    .map(
+      (funcName) => `
   describe("${funcName}", () => {
     it("should work correctly with valid input", () => {
       // Add test implementation
@@ -531,12 +551,17 @@ describe("${fileInfo.fileName}", () => {
       expect(() => ${funcName}(/* invalid args */)).toThrow();
     });
   });
-  `).join("\n")}
+  `,
+    )
+    .join("\n")}
 });
 `;
 }
 
-async function generateIntegrationTest(fileInfo: FileInfo, fileContent: string): Promise<string> {
+async function generateIntegrationTest(
+  fileInfo: FileInfo,
+  fileContent: string,
+): Promise<string> {
   if (fileInfo.isApiRoute) {
     return generateApiIntegrationTest(fileInfo);
   }
@@ -666,11 +691,15 @@ describe("${fileInfo.componentName} Integration Tests", () => {
 `;
 }
 
-async function generateE2ETest(fileInfo: FileInfo, fileContent: string): Promise<string> {
+async function generateE2ETest(
+  fileInfo: FileInfo,
+  fileContent: string,
+): Promise<string> {
   const pageName = fileInfo.componentName.replace("Page", "");
-  const route = fileInfo.fileName === "page"
-    ? `/${fileInfo.fileName.split("/").slice(-2, -1)[0] || ""}`
-    : `/${fileInfo.fileName}`;
+  const route =
+    fileInfo.fileName === "page"
+      ? `/${fileInfo.fileName.split("/").slice(-2, -1)[0] || ""}`
+      : `/${fileInfo.fileName}`;
 
   return `import { test, expect } from "@playwright/test";
 

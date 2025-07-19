@@ -10,7 +10,10 @@ interface ComponentOptions {
   dryRun?: boolean;
 }
 
-export async function generateComponent(name: string, options: ComponentOptions) {
+export async function generateComponent(
+  name: string,
+  options: ComponentOptions,
+) {
   const componentName = pascalCase(name);
   const componentType = options.type ?? "component";
 
@@ -59,7 +62,10 @@ export async function generateComponent(name: string, options: ComponentOptions)
   // Generate stories file (for components only)
   if (componentType === "component") {
     const storiesContent = generateComponentStories(componentName);
-    const storiesPath = path.join(componentDir, `${kebabCase(name)}.stories.tsx`);
+    const storiesPath = path.join(
+      componentDir,
+      `${kebabCase(name)}.stories.tsx`,
+    );
     await fs.writeFile(storiesPath, await formatCode(storiesContent));
   }
 
@@ -68,7 +74,9 @@ export async function generateComponent(name: string, options: ComponentOptions)
   const indexPath = path.join(componentDir, "index.ts");
   await fs.writeFile(indexPath, indexContent);
 
-  console.log(`✅ Component ${componentName} generated at ${path.relative(process.cwd(), componentDir)}`);
+  console.log(
+    `✅ Component ${componentName} generated at ${path.relative(process.cwd(), componentDir)}`,
+  );
 }
 
 function generateDefaultComponent(name: string): string {

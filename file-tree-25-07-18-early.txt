@@ -3,14 +3,20 @@
 ├───node_modules
 ├───prisma
 │   ├───schema.prisma
+│   |    
 │   └───migrations
+|       |    migration_lock.toml
+|       |  
 │       └───20250716212423_init
+|                migration.sql
 ├───public
 │   ├───exports
 │   └───templates
 ├───scripts
 │   ├───seed.ts
-│   |
+│   |    quick-fix.sh
+│   |    fix-database.ts
+│   |    
 │   ├───generate
 |   │       index.ts
 |   │       utils.ts
@@ -76,6 +82,7 @@ C:.
 │   │
 │   ├───admin
 │   │   └───generators
+│   │       │   layout.tsx
 │   │       │   page.tsx
 │   │       │
 │   │       └───components
@@ -110,20 +117,41 @@ C:.
 │   │           export-dropdown.tsx
 │   │           page.tsx
 │   │
+│   ├───settings
+│   │   └───preferences
+│   │       │   page.tsx
+│   │       │
+│   │       └───components
+│   │               cost-limits.tsx
+│   │               performance-settings.tsx
+│   │               provider-matrix.tsx
+│   │
 │   └───_components
 │           post.tsx
 │
 ├───components
+│   │   app-sidebar.tsx
+│   │   navigation-guard.tsx
 │   │   theme-provider.tsx
 │   │
 │   ├───documents
+│   │       generation-progress-mobile.tsx
+│   │       generation-progress.tsx
+│   │
 │   ├───forms
 │   │       form-generator.tsx
+│   │
+│   ├───llm
+│   │       provider-selector.tsx
+│   │
+│   ├───providers
+│   │       socket-provider.tsx
 │   │
 │   └───ui
 │           accordion.tsx
 │           alert-dialog.tsx
 │           alert.tsx
+│           animated-progress.tsx
 │           aspect-ratio.tsx
 │           badge.tsx
 │           breadcrumb.tsx
@@ -164,10 +192,23 @@ C:.
 │           tooltip.tsx
 │
 ├───config
-│       documents.ts
+│   │   documents.ts
+│   │
+│   └───schemas
+│           base.ts
+│           biography.ts
+│           business-plan.ts
+│           case-summary.ts
+│           grant-proposal.ts
+│           index.ts
 │
 ├───hooks
+│       use-document-preferences.ts
 │       use-mobile.ts
+│       use-page-visibility.ts
+│       use-progress-toast.ts
+│       use-socket-enhanced.ts
+│       use-socket.ts
 │
 ├───lib
 │   │   utils.ts
@@ -205,7 +246,9 @@ C:.
 │   │   │       generators-enhanced.ts
 │   │   │       generators.ts
 │   │   │       health.ts
+│   │   │       knowledge.ts
 │   │   │       post.ts
+│   │   │       preferences.ts
 │   │   │       template.ts
 │   │   │       usage.ts
 │   │   │       user.ts
@@ -217,12 +260,96 @@ C:.
 │   │       config.ts
 │   │       index.ts
 │   │
-│   └───queue
-│       │   processor.ts
-│       │
-│       └───workers
+│   ├───queue
+│   │   │   processor.ts
+│   │   │
+│   │   └───workers
+│   │           document-generation.ts
+│   │
+│   ├───services
+│   │   ├───document
+│   │   │       unified-document-service.ts
+│   │   │
+│   │   ├───generators
+│   │   │       index.ts
+│   │   │
+│   │   ├───llm
+│   │   │   │   base.ts
+│   │   │   │   index.ts
+│   │   │   │
+│   │   │   ├───chains
+│   │   │   │       outline.ts
+│   │   │   │       refinement.ts
+│   │   │   │       section.ts
+│   │   │   │
+│   │   │   ├───prompts
+│   │   │   │       biography.ts
+│   │   │   │       business-plan.ts
+│   │   │   │       case-summary.ts
+│   │   │   │       grant-proposal.ts
+│   │   │   │       index.ts
+│   │   │   │       medical-report.ts
+│   │   │   │
+│   │   │   ├───providers
+│   │   │   │       anthropic.ts
+│   │   │   │       gemini.ts
+│   │   │   │       llama.ts
+│   │   │   │       openai.ts
+│   │   │   │       perplexity.ts
+│   │   │   │
+│   │   │   └───utils
+│   │   │           splitter.ts
+│   │   │           tokenizer.ts
+│   │   │           validator.ts
+│   │   │
+│   │   ├───preferences
+│   │   │       sync.ts
+│   │   │
+│   │   ├───progress
+│   │   │       storage.ts
+│   │   │       unified-progress.ts
+│   │   │
+│   │   ├───rag
+│   │   │   │   index.ts
+│   │   │   │   types.ts
+│   │   │   │
+│   │   │   ├───embeddings
+│   │   │   │       base.ts
+│   │   │   │       index.ts
+│   │   │   │       openai.ts
+│   │   │   │
+│   │   │   ├───ingestion
+│   │   │   │       document.ts
+│   │   │   │       metadata.ts
+│   │   │   │       pipeline.ts
+│   │   │   │
+│   │   │   ├───processing
+│   │   │   │       document-processor.ts
+│   │   │   │
+│   │   │   ├───retrieval
+│   │   │   │       hybrid.ts
+│   │   │   │       reranker.ts
+│   │   │   │       similarity.ts
+│   │   │   │
+│   │   │   └───vectorstore
+│   │   │           base.ts
+│   │   │           pgvector.ts
+│   │   │           pinecone.ts
+│   │   │
+│   │   └───storage
+│   │           index.ts
+│   │
+│   └───websocket
+│           index.ts
+│
+├───services
+│       notification.ts
+│
 ├───styles
 │       globals.css
+│
+├───test
+│       websocket-mock.ts
 │
 ├───trpc
 │       query-client.ts
@@ -231,3 +358,4 @@ C:.
 │
 └───types
         global.d.ts
+        preferences.ts
