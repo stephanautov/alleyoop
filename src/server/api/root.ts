@@ -8,7 +8,7 @@ import { templateRouter } from "./routers/template";
 import { usageRouter } from "./routers/usage";
 import { healthRouter } from "./routers/health";
 import { postRouter } from "./routers/post";
-import { generatorsRouter } from "./routers/generators";
+import { enhancedGeneratorsRouter as generatorsRouter } from "./routers/generators-enhanced";
 import { preferencesRouter } from "./routers/preferences";
 
 /**

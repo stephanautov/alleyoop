@@ -1,150 +1,254 @@
-// File: src/server/api/routers/knowledge.ts
-// ============================================
-
+// src/server/api/routers/knowledge.ts
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
-import { RAGService } from "~/server/services/rag";
+import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { TRPCError } from "@trpc/server";
-import { v4 as uuidv4 } from "uuid";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
-import { env } from "~/env";
+import { RAGService } from "~/server/services/rag";
+import { SourceType, ProcessingStatus } from "@prisma/client";
+import { S3StorageProvider } from "~/server/services/storage/s3-provider";
+import { LocalStorageProvider } from "~/server/services/storage/local-provider";
+import type { StorageProvider } from "~/server/services/storage/types";
 
-const s3Client = new S3Client({
-    region: env.AWS_REGION!,
-    credentials: {
-        accessKeyId: env.AWS_ACCESS_KEY_ID!,
-        secretAccessKey: env.AWS_SECRET_ACCESS_KEY!,
-    },
+const uploadKnowledgeSchema = z.object({
+    name: z.string().min(1).max(255),
+    description: z.string().optional(),
+    type: z.nativeEnum(SourceType),
+    content: z.string().optional(), // For direct text/URL
+    fileBase64: z.string().optional(), // For file uploads
+    fileName: z.string().optional(),
+    mimeType: z.string().optional(),
+    tags: z.array(z.string()).default([]),
+    metadata: z.record(z.any()).optional(),
+});
+
+const searchKnowledgeSchema = z.object({
+    query: z.string().min(1),
+    limit: z.number().min(1).max(20).default(5),
+    threshold: z.number().min(0).max(1).default(0.7),
+    sourceIds: z.array(z.string()).optional(),
+    tags: z.array(z.string()).optional(),
 });
 
 export const knowledgeRouter = createTRPCRouter({
-    // Upload a knowledge source
+    // Upload and process a knowledge source
     upload: protectedProcedure
-        .input(z.object({
-            name: z.string(),
-            description: z.string().optional(),
-            content: z.string(), // Base64 encoded file content
-            mimeType: z.string(),
-            fileName: z.string(),
-            tags: z.array(z.string()).optional(),
-        }))
+        .input(uploadKnowledgeSchema)
         .mutation(async ({ ctx, input }) => {
-            const buffer = Buffer.from(input.content, "base64");
-            const fileSize = buffer.length;
+            const userId = ctx.session.user.id;
+            const ragService = new RAGService(ctx.db);
 
-            // Validate file size (10MB limit)
-            if (fileSize > 10 * 1024 * 1024) {
+            try {
+                // Create knowledge source record
+                const knowledgeSource = await ctx.db.knowledgeSource.create({
+                    data: {
+                        userId,
+                        name: input.name,
+                        description: input.description,
+                        type: input.type,
+                        mimeType: input.mimeType,
+                        originalName: input.fileName,
+                        tags: input.tags,
+                        metadata: input.metadata || {},
+                        status: ProcessingStatus.PENDING,
+                    },
+                });
+
+                // Handle file storage if provided
+                if (input.fileBase64 && input.fileName) {
+                    const storage = await getStorageProvider(ctx, userId);
+                    const buffer = Buffer.from(input.fileBase64, 'base64');
+
+                    const storageKey = await storage.upload(
+                        buffer,
+                        `knowledge/${userId}/${knowledgeSource.id}/${input.fileName}`
+                    );
+
+                    await ctx.db.knowledgeSource.update({
+                        where: { id: knowledgeSource.id },
+                        data: {
+                            storageKey,
+                            fileSize: buffer.length,
+                        },
+                    });
+                } else if (input.content) {
+                    // Direct content (text or URL)
+                    await ctx.db.knowledgeSource.update({
+                        where: { id: knowledgeSource.id },
+                        data: {
+                            content: input.content,
+                            url: input.type === SourceType.WEBSITE ? input.content : null,
+                        },
+                    });
+                }
+
+                // Queue for processing
+                const queue = ctx.queue.get('rag-processing');
+                await queue.add('process-knowledge', {
+                    knowledgeSourceId: knowledgeSource.id,
+                    userId,
+                });
+
+                return {
+                    id: knowledgeSource.id,
+                    status: 'processing',
+                    message: 'Knowledge source uploaded and queued for processing',
+                };
+            } catch (error) {
+                console.error('Knowledge upload error:', error);
                 throw new TRPCError({
-                    code: "BAD_REQUEST",
-                    message: "File size exceeds 10MB limit",
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to upload knowledge source',
                 });
             }
+        }),
 
-            // Generate storage key
-            const storageKey = `knowledge/${ctx.session.user.id}/${uuidv4()}-${input.fileName}`;
+    // Search across knowledge sources
+    search: protectedProcedure
+        .input(searchKnowledgeSchema)
+        .query(async ({ ctx, input }) => {
+            const userId = ctx.session.user.id;
+            const ragService = new RAGService(ctx.db);
 
-            // Upload to S3 (or save locally in development)
-            if (env.NODE_ENV === "production") {
-                await s3Client.send(
-                    new PutObjectCommand({
-                        Bucket: env.AWS_S3_BUCKET,
-                        Key: storageKey,
-                        Body: buffer,
-                        ContentType: input.mimeType,
+            try {
+                const results = await ragService.search(input.query, {
+                    userId,
+                    limit: input.limit,
+                    threshold: input.threshold,
+                    sourceIds: input.sourceIds,
+                });
+
+                // Enhance results with source metadata
+                const enhancedResults = await Promise.all(
+                    results.map(async (result) => {
+                        const source = await ctx.db.knowledgeSource.findUnique({
+                            where: { id: result.sourceId },
+                            select: {
+                                name: true,
+                                type: true,
+                                createdAt: true,
+                                tags: true,
+                            },
+                        });
+
+                        return {
+                            ...result,
+                            source,
+                        };
                     })
                 );
-            } else {
-                // In development, save to local filesystem
-                const fs = await import("fs/promises");
-                const path = await import("path");
-                const localPath = path.join(process.cwd(), "uploads", storageKey);
-                await fs.mkdir(path.dirname(localPath), { recursive: true });
-                await fs.writeFile(localPath, buffer);
-            }
 
-            // Create knowledge source record
-            const source = await ctx.db.knowledgeSource.create({
-                data: {
-                    userId: ctx.session.user.id,
-                    name: input.name,
-                    description: input.description,
-                    type: "DOCUMENT",
-                    mimeType: input.mimeType,
-                    originalName: input.fileName,
-                    fileSize,
-                    storageKey,
-                    tags: input.tags || [],
-                    status: "PENDING",
+                return {
+                    results: enhancedResults,
+                    query: input.query,
+                    totalResults: enhancedResults.length,
+                };
+            } catch (error) {
+                console.error('Knowledge search error:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to search knowledge sources',
+                });
+            }
+        }),
+
+    // List user's knowledge sources
+    list: protectedProcedure
+        .input(z.object({
+            limit: z.number().min(1).max(100).default(20),
+            offset: z.number().min(0).default(0),
+            status: z.nativeEnum(ProcessingStatus).optional(),
+            tags: z.array(z.string()).optional(),
+        }))
+        .query(async ({ ctx, input }) => {
+            const userId = ctx.session.user.id;
+
+            const where = {
+                userId,
+                ...(input.status && { status: input.status }),
+                ...(input.tags?.length && {
+                    tags: { hasSome: input.tags },
+                }),
+            };
+
+            const [sources, total] = await ctx.db.$transaction([
+                ctx.db.knowledgeSource.findMany({
+                    where,
+                    take: input.limit,
+                    skip: input.offset,
+                    orderBy: { createdAt: 'desc' },
+                    include: {
+                        _count: {
+                            select: { embeddings: true },
+                        },
+                    },
+                }),
+                ctx.db.knowledgeSource.count({ where }),
+            ]);
+
+            return {
+                sources,
+                total,
+                hasMore: input.offset + sources.length < total,
+            };
+        }),
+
+    // Get single knowledge source with details
+    get: protectedProcedure
+        .input(z.object({ id: z.string() }))
+        .query(async ({ ctx, input }) => {
+            const userId = ctx.session.user.id;
+
+            const source = await ctx.db.knowledgeSource.findFirst({
+                where: {
+                    id: input.id,
+                    userId,
+                },
+                include: {
+                    _count: {
+                        select: {
+                            embeddings: true,
+                            documents: true,
+                        },
+                    },
                 },
             });
 
-            // Process document asynchronously
-            const ragService = new RAGService(ctx.db);
-            ragService.ingestDocument(source.id, buffer, input.mimeType).catch(error => {
-                console.error("Failed to process document:", error);
-            });
+            if (!source) {
+                throw new TRPCError({
+                    code: 'NOT_FOUND',
+                    message: 'Knowledge source not found',
+                });
+            }
 
             return source;
         }),
 
-    // List knowledge sources
-    list: protectedProcedure
-        .input(z.object({
-            limit: z.number().min(1).max(100).default(20),
-            cursor: z.string().optional(),
-            status: z.enum(["PENDING", "PROCESSING", "COMPLETED", "FAILED"]).optional(),
-        }))
-        .query(async ({ ctx, input }) => {
-            const sources = await ctx.db.knowledgeSource.findMany({
-                where: {
-                    userId: ctx.session.user.id,
-                    status: input.status,
-                },
-                take: input.limit + 1,
-                cursor: input.cursor ? { id: input.cursor } : undefined,
-                orderBy: { createdAt: "desc" },
-            });
-
-            let nextCursor: string | undefined = undefined;
-            if (sources.length > input.limit) {
-                const nextItem = sources.pop();
-                nextCursor = nextItem!.id;
-            }
-
-            return {
-                sources,
-                nextCursor,
-            };
-        }),
-
     // Delete knowledge source
     delete: protectedProcedure
-        .input(z.object({
-            id: z.string(),
-        }))
+        .input(z.object({ id: z.string() }))
         .mutation(async ({ ctx, input }) => {
-            const source = await ctx.db.knowledgeSource.findUnique({
-                where: { id: input.id },
+            const userId = ctx.session.user.id;
+
+            const source = await ctx.db.knowledgeSource.findFirst({
+                where: {
+                    id: input.id,
+                    userId,
+                },
             });
 
-            if (!source || source.userId !== ctx.session.user.id) {
+            if (!source) {
                 throw new TRPCError({
-                    code: "NOT_FOUND",
-                    message: "Knowledge source not found",
+                    code: 'NOT_FOUND',
+                    message: 'Knowledge source not found',
                 });
             }
 
-            // Delete from storage
+            // Delete from storage if exists
             if (source.storageKey) {
-                if (env.NODE_ENV === "production") {
-                    // Delete from S3
-                    // Implementation depends on your S3 setup
-                } else {
-                    // Delete from local filesystem
-                    const fs = await import("fs/promises");
-                    const path = await import("path");
-                    const localPath = path.join(process.cwd(), "uploads", source.storageKey);
-                    await fs.unlink(localPath).catch(() => { });
+                try {
+                    const storage = await getStorageProvider(ctx, userId);
+                    await storage.delete(source.storageKey);
+                } catch (error) {
+                    console.error('Failed to delete from storage:', error);
                 }
             }
 
@@ -156,25 +260,68 @@ export const knowledgeRouter = createTRPCRouter({
             return { success: true };
         }),
 
-    // Search knowledge base
-    search: protectedProcedure
-        .input(z.object({
-            query: z.string(),
-            sourceIds: z.array(z.string()).optional(),
-            limit: z.number().min(1).max(20).default(5),
-        }))
+    // Get processing status for a source
+    status: protectedProcedure
+        .input(z.object({ id: z.string() }))
         .query(async ({ ctx, input }) => {
-            const ragService = new RAGService(ctx.db);
+            const userId = ctx.session.user.id;
 
-            const context = await ragService.retrieveContext(
-                input.query,
-                ctx.session.user.id,
-                {
-                    sourceIds: input.sourceIds,
-                    limit: input.limit,
+            const source = await ctx.db.knowledgeSource.findFirst({
+                where: {
+                    id: input.id,
+                    userId,
+                },
+                select: {
+                    status: true,
+                    error: true,
+                    processedAt: true,
+                    _count: {
+                        select: { embeddings: true },
+                    },
+                },
+            });
+
+            if (!source) {
+                throw new TRPCError({
+                    code: 'NOT_FOUND',
+                    message: 'Knowledge source not found',
+                });
+            }
+
+            // Get progress from Redis if still processing
+            let progress = null;
+            if (source.status === ProcessingStatus.PROCESSING) {
+                const progressKey = `rag:progress:${input.id}`;
+                const progressData = await ctx.redis.get(progressKey);
+                if (progressData) {
+                    progress = JSON.parse(progressData);
                 }
-            );
+            }
 
-            return context;
+            return {
+                status: source.status,
+                error: source.error,
+                processedAt: source.processedAt,
+                embeddingCount: source._count.embeddings,
+                progress,
+            };
         }),
 });
+
+// Helper to get storage provider based on user preferences
+async function getStorageProvider(ctx: any, userId: string): Promise<StorageProvider> {
+    const preferences = await ctx.db.userPreferences.findUnique({
+        where: { userId },
+        select: { preferredStorage: true },
+    });
+
+    const storageType = preferences?.preferredStorage || 'local';
+
+    switch (storageType) {
+        case 's3':
+            return new S3StorageProvider();
+        case 'local':
+        default:
+            return new LocalStorageProvider();
+    }
+}

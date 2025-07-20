@@ -1,0 +1,385 @@
+// src/app/page.tsx
+import Link from "next/link";
+import { auth } from "@clerk/nextjs";
+import { redirect } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { 
+  Sparkles, 
+  Zap, 
+  Shield, 
+  Clock, 
+  FileText, 
+  Users, 
+  ChevronRight,
+  Star,
+  ArrowRight,
+  CheckCircle
+} from "lucide-react";
+
+const features = [
+  {
+    icon: Zap,
+    title: "Lightning Fast",
+    description: "Generate professional documents in minutes, not hours. Our AI understands context and creates tailored content.",
+  },
+  {
+    icon: Shield,
+    title: "Secure & Private",
+    description: "Your data is encrypted and never used for training. We comply with SOC2 and GDPR standards.",
+  },
+  {
+    icon: Clock,
+    title: "Save Time",
+    description: "Reduce document creation time by 80%. Focus on what matters while AI handles the writing.",
+  },
+  {
+    icon: Users,
+    title: "Team Collaboration",
+    description: "Work together seamlessly with real-time collaboration and version control.",
+  },
+];
+
+const documentTypes = [
+  {
+    title: "Biography",
+    description: "Professional biographies for any purpose",
+    icon: "👤",
+    available: true,
+  },
+  {
+    title: "Business Plan",
+    description: "Comprehensive business plans with financials",
+    icon: "💼",
+    available: false,
+  },
+  {
+    title: "Legal Case Summary",
+    description: "Concise summaries of legal cases",
+    icon: "⚖️",
+    available: false,
+  },
+  {
+    title: "Grant Proposal",
+    description: "Winning grant proposals that get funded",
+    icon: "💰",
+    available: false,
+  },
+];
+
+const testimonials = [
+  {
+    name: "Sarah Chen",
+    role: "CEO, TechStart",
+    content: "AlleyOop helped us create a winning business plan in just 2 hours. We secured $2M in funding!",
+    rating: 5,
+  },
+  {
+    name: "Michael Rodriguez",
+    role: "Attorney",
+    content: "The case summaries are incredibly accurate and save me hours of work every week.",
+    rating: 5,
+  },
+  {
+    name: "Dr. Emily Watson",
+    role: "Research Director",
+    content: "Grant proposals that used to take weeks now take just a day. Game-changing technology.",
+    rating: 5,
+  },
+];
+
+export default async function LandingPage() {
+  const { userId } = auth();
+  
+  if (userId) {
+    redirect("/dashboard");
+  }
+
+  return (
+    <div className="flex flex-col min-h-screen">
+      {/* Navigation */}
+      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="container flex h-16 items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-6 w-6 text-primary" />
+            <span className="text-xl font-bold">AlleyOop</span>
+          </div>
+          
+          <nav className="hidden md:flex items-center gap-6">
+            <Link href="#features" className="text-sm font-medium hover:text-primary transition-colors">
+              Features
+            </Link>
+            <Link href="#documents" className="text-sm font-medium hover:text-primary transition-colors">
+              Documents
+            </Link>
+            <Link href="#testimonials" className="text-sm font-medium hover:text-primary transition-colors">
+              Testimonials
+            </Link>
+            <Link href="/pricing" className="text-sm font-medium hover:text-primary transition-colors">
+              Pricing
+            </Link>
+          </nav>
+          
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" asChild>
+              <Link href="/sign-in">Sign In</Link>
+            </Button>
+            <Button asChild>
+              <Link href="/sign-up">
+                Get Started
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      {/* Hero Section */}
+      <section className="relative overflow-hidden">
+        <div className="absolute inset-0 bg-grid-slate-100 [mask-image:radial-gradient(ellipse_at_center,white,transparent)] -z-10" />
+        <div className="container py-24 md:py-32">
+          <div className="mx-auto max-w-4xl text-center">
+            <Badge variant="secondary" className="mb-4">
+              <Sparkles className="mr-1 h-3 w-3" />
+              Powered by Advanced AI
+            </Badge>
+            
+            <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">
+              Create Professional Documents
+              <span className="text-primary block">In Minutes, Not Hours</span>
+            </h1>
+            
+            <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
+              AlleyOop uses cutting-edge AI to generate high-quality documents tailored to your needs. 
+              From biographies to business plans, we've got you covered.
+            </p>
+            
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Button size="lg" asChild>
+                <Link href="/sign-up">
+                  Start Free Trial
+                  <ChevronRight className="ml-2 h-5 w-5" />
+                </Link>
+              </Button>
+              <Button size="lg" variant="outline" asChild>
+                <Link href="#demo">
+                  Watch Demo
+                </Link>
+              </Button>
+            </div>
+            
+            <p className="text-sm text-muted-foreground mt-4">
+              No credit card required • 14-day free trial • Cancel anytime
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Features Section */}
+      <section id="features" className="py-24 bg-slate-50">
+        <div className="container">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">
+              Everything You Need to Create Amazing Documents
+            </h2>
+            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+              Powerful features designed to make document creation effortless and professional.
+            </p>
+          </div>
+          
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+            {features.map((feature) => {
+              const Icon = feature.icon;
+              return (
+                <Card key={feature.title} className="border-0 shadow-lg">
+                  <CardHeader>
+                    <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
+                      <Icon className="h-6 w-6 text-primary" />
+                    </div>
+                    <CardTitle className="text-xl">{feature.title}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-muted-foreground">{feature.description}</p>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* Document Types Section */}
+      <section id="documents" className="py-24">
+        <div className="container">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">
+              Document Types We Support
+            </h2>
+            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+              Choose from our growing library of document templates, each optimized for specific use cases.
+            </p>
+          </div>
+          
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {documentTypes.map((doc) => (
+              <Card 
+                key={doc.title} 
+                className={`relative ${!doc.available ? 'opacity-60' : ''}`}
+              >
+                <CardHeader>
+                  <div className="text-4xl mb-4">{doc.icon}</div>
+                  <CardTitle className="flex items-center justify-between">
+                    {doc.title}
+                    {!doc.available && (
+                      <Badge variant="secondary" className="text-xs">
+                        Coming Soon
+                      </Badge>
+                    )}
+                  </CardTitle>
+                  <CardDescription>{doc.description}</CardDescription>
+                </CardHeader>
+                {doc.available && (
+                  <CardContent>
+                    <Button className="w-full" variant="secondary" asChild>
+                      <Link href="/sign-up">
+                        Try Now
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </Link>
+                    </Button>
+                  </CardContent>
+                )}
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Testimonials Section */}
+      <section id="testimonials" className="py-24 bg-slate-50">
+        <div className="container">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">
+              Loved by Professionals Worldwide
+            </h2>
+            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+              See what our users have to say about their experience with AlleyOop.
+            </p>
+          </div>
+          
+          <div className="grid md:grid-cols-3 gap-8">
+            {testimonials.map((testimonial) => (
+              <Card key={testimonial.name} className="border-0 shadow-lg">
+                <CardHeader>
+                  <div className="flex mb-4">
+                    {[...Array(testimonial.rating)].map((_, i) => (
+                      <Star key={i} className="h-5 w-5 fill-yellow-400 text-yellow-400" />
+                    ))}
+                  </div>
+                  <p className="text-lg mb-4">"{testimonial.content}"</p>
+                  <div>
+                    <p className="font-semibold">{testimonial.name}</p>
+                    <p className="text-sm text-muted-foreground">{testimonial.role}</p>
+                  </div>
+                </CardHeader>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* CTA Section */}
+      <section className="py-24 bg-primary text-primary-foreground">
+        <div className="container">
+          <div className="text-center max-w-3xl mx-auto">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">
+              Ready to Transform Your Document Creation?
+            </h2>
+            <p className="text-xl mb-8 opacity-90">
+              Join thousands of professionals who are saving time and creating better documents with AlleyOop.
+            </p>
+            
+            <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
+              <Button size="lg" variant="secondary" asChild>
+                <Link href="/sign-up">
+                  Start Your Free Trial
+                  <ChevronRight className="ml-2 h-5 w-5" />
+                </Link>
+              </Button>
+              <Button size="lg" variant="outline" className="bg-transparent text-white border-white hover:bg-white/10" asChild>
+                <Link href="/pricing">
+                  View Pricing
+                </Link>
+              </Button>
+            </div>
+            
+            <div className="flex flex-col sm:flex-row gap-6 justify-center text-sm">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="h-5 w-5" />
+                14-day free trial
+              </div>
+              <div className="flex items-center gap-2">
+                <CheckCircle className="h-5 w-5" />
+                No credit card required
+              </div>
+              <div className="flex items-center gap-2">
+                <CheckCircle className="h-5 w-5" />
+                Cancel anytime
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="border-t py-12">
+        <div className="container">
+          <div className="grid md:grid-cols-4 gap-8">
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <Sparkles className="h-6 w-6 text-primary" />
+                <span className="text-xl font-bold">AlleyOop</span>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                AI-powered document generation for modern professionals.
+              </p>
+            </div>
+            
+            <div>
+              <h4 className="font-semibold mb-4">Product</h4>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li><Link href="#features" className="hover:text-foreground">Features</Link></li>
+                <li><Link href="/pricing" className="hover:text-foreground">Pricing</Link></li>
+                <li><Link href="/templates" className="hover:text-foreground">Templates</Link></li>
+                <li><Link href="/api" className="hover:text-foreground">API</Link></li>
+              </ul>
+            </div>
+            
+            <div>
+              <h4 className="font-semibold mb-4">Company</h4>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li><Link href="/about" className="hover:text-foreground">About</Link></li>
+                <li><Link href="/blog" className="hover:text-foreground">Blog</Link></li>
+                <li><Link href="/careers" className="hover:text-foreground">Careers</Link></li>
+                <li><Link href="/contact" className="hover:text-foreground">Contact</Link></li>
+              </ul>
+            </div>
+            
+            <div>
+              <h4 className="font-semibold mb-4">Legal</h4>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li><Link href="/privacy" className="hover:text-foreground">Privacy Policy</Link></li>
+                <li><Link href="/terms" className="hover:text-foreground">Terms of Service</Link></li>
+                <li><Link href="/security" className="hover:text-foreground">Security</Link></li>
+              </ul>
+            </div>
+          </div>
+          
+          <div className="mt-8 pt-8 border-t text-center text-sm text-muted-foreground">
+            <p>&copy; 2024 AlleyOop. All rights reserved.</p>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+}

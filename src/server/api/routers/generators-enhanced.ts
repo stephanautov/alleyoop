@@ -2,7 +2,9 @@
 // Enhanced generator router with validation and rate limiting
 
 import { z } from "zod";
-import { createTRPCRouter, adminProcedure } from "../trpc";
+import { createTRPCRouter, adminProcedure, protectedProcedure } from "../trpc";
+import { observable } from "@trpc/server/observable";
+import { EventEmitter } from "events";
 import { TRPCError } from "@trpc/server";
 import { spawn } from "child_process";
 import path from "path";
@@ -36,6 +38,9 @@ interface ValidationResult {
 
 // Store for generated files tracking (in-memory for now)
 const generatedFilesStore = new Map<string, GeneratedFileInfo[]>();
+
+// Event emitter for streaming output
+const generatorEvents = new EventEmitter();
 
 // Rate limiting middleware
 async function rateLimitMiddleware(userId: string, action: string) {
@@ -169,6 +174,8 @@ async function runGeneratorWithStream(
 
     child.stdout.on("data", async (data) => {
       const output = data.toString();
+      // Emit log to subscribers
+      generatorEvents.emit(sessionId, { type: "log", message: output });
       console.log(output);
 
       // Parse preview files if in preview mode
@@ -230,6 +237,22 @@ async function trackGeneratedFile(
 }
 
 export const enhancedGeneratorsRouter = createTRPCRouter({
+  // Stream generator output
+  streamGeneration: protectedProcedure
+    .input(z.object({ sessionId: z.string() }))
+    .subscription(({ input }) => {
+      return observable<{ type: string; message?: string; file?: string; content?: string; progress?: number }>((emit) => {
+        const handler = (data: any) => {
+          emit.next(data);
+        };
+
+        generatorEvents.on(input.sessionId, handler);
+
+        return () => {
+          generatorEvents.off(input.sessionId, handler);
+        };
+      });
+    }),
   generateRouterWithValidation: adminProcedure
     .input(
       z.object({
@@ -388,6 +411,15 @@ export const enhancedGeneratorsRouter = createTRPCRouter({
 
       return { results };
     }),
+
+  // Get rate limit information
+  getRateLimit: adminProcedure.query(async ({ ctx }) => {
+    const rateLimit = await rateLimitMiddleware(
+      ctx.session.user.id,
+      "generate:router",
+    );
+    return rateLimit;
+  }),
 
   // Get generator metrics
   getMetrics: adminProcedure.query(async ({ ctx }) => {

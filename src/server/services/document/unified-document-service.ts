@@ -15,6 +15,7 @@ import { Redis } from 'ioredis';
 import { env } from '~/env';
 import { EventEmitter } from 'events';
 import { type GenerateDocumentParams, type GeneratedDocument, type DocumentProviderName, type ToneType, type ProgressEventData, type SectionData } from './types';
+import { enhanceWithRAG, type RAGContext } from './rag-enhanced-generation';
 
 // LLM Service Wrapper to add EventEmitter capabilities
 class LLMServiceWrapper extends EventEmitter {
@@ -66,7 +67,14 @@ export interface UnifiedGenerationOptions {
     maxTokens?: number;
     useCache?: boolean;
     useRAG?: boolean;
-    ragSourceIds?: string[];
+    ragEnabled?: boolean;
+    knowledgeSourceIds?: string[];
+    autoSelectSources?: boolean;
+    ragConfig?: {
+        maxResults?: number;
+        minSimilarity?: number;
+        includeMetadata?: boolean;
+    };
     forceRegenerate?: boolean;
 }
 
@@ -125,17 +133,49 @@ export class UnifiedDocumentService {
         }
 
         // 5. Get RAG context if enabled
-        let ragContext: any;
-        if (config.useRAG) {
-            ragContext = await this.getRAGContext(config, options);
+        let ragContext: RAGContext | undefined;
+        let enhancedInput = options.input;
+
+        if (config.useRAG || options.ragEnabled) {
+            console.log('[Document Service] Enhancing with RAG context...');
+
+            const ragResult = await enhanceWithRAG(
+                options.type,
+                options.input,
+                options.userId,
+                {
+                    ragEnabled: true,
+                    knowledgeSourceIds: options.knowledgeSourceIds,
+                    autoRAG: options.autoSelectSources,
+                }
+            );
+
+            if (ragResult.ragContext) {
+                ragContext = ragResult.ragContext;
+                enhancedInput = ragResult.input;
+
+                console.log(`[Document Service] Found ${ragContext.sources.length} relevant sources`);
+
+                // Emit RAG context found event
+                this.emit('rag:context', {
+                    documentId: document.id,
+                    sourceCount: ragContext.sources.length,
+                    summary: ragContext.summary,
+                });
+            }
         }
 
         // 6. Create document record
-        const document = await this.createDocument(options, config);
+        const document = await this.createDocument(options, config, ragContext);
 
         // 7. Generate content with progress tracking
         try {
-            const result = await this.generateWithProgress(document.id, config, ragContext);
+            const result = await this.generateWithProgress(
+                document.id,
+                config,
+                enhancedInput, // Use enhanced input instead of original
+                ragContext
+            );
 
             // 8. Cache successful generation
             if (config.useCache) {
@@ -308,7 +348,7 @@ export class UnifiedDocumentService {
                 searchQuery,
                 config.userId,
                 {
-                    sourceIds: options.ragSourceIds,
+                    sourceIds: options.knowledgeSourceIds,
                     threshold: config.ragThreshold,
                     limit: 5,
                 }
@@ -351,7 +391,11 @@ export class UnifiedDocumentService {
     /**
      * Create document record in database
      */
-    private async createDocument(options: UnifiedGenerationOptions, config: any) {
+    private async createDocument(
+        options: UnifiedGenerationOptions,
+        config: any,
+        ragContext?: RAGContext
+    ): Promise<any> {
         return await this.db.document.create({
             data: {
                 userId: options.userId,
@@ -364,14 +408,12 @@ export class UnifiedDocumentService {
                 temperature: config.temperature,
                 maxTokens: config.maxTokens,
                 // Use ragContext instead of ragEnabled
-                ragContext: config.useRAG
-                    ? {
-                        enabled: true,
-                        threshold: config.ragThreshold,
-                        settings: {},
-                    }
-                    : undefined,
-                // Don't use metadata field - store in appropriate fields
+                ragEnabled: !!ragContext,
+                ragContext: ragContext ? {
+                    sourceCount: ragContext.sources.length,
+                    sourceIds: ragContext.sources.map(s => s.id),
+                    summary: ragContext.summary,
+                } : null,
             },
         });
     }
@@ -381,8 +423,8 @@ export class UnifiedDocumentService {
      */
     private async generateWithProgress(
         documentId: string,
-        config: any,
-        ragContext?: any
+        input: any, // This is now the enhanced input
+        ragContext?: RAGContext
     ): Promise<any> {
         const io = getIO();
         const progressKey = `progress:document:${documentId}`;
@@ -430,14 +472,19 @@ export class UnifiedDocumentService {
             // Build final prompt with RAG context if available
             let finalPrompt = config.prompts;
             if (ragContext && ragContext.sources.length > 0) {
+                const ragSystemPrompt = this.buildRAGSystemPrompt(
+                    config.systemPrompt,
+                    ragContext,
+                    config.documentType
+                );
+
                 finalPrompt = {
                     ...config.prompts,
-                    systemPrompt: this.ragService.buildRAGPrompt(
-                        config.systemPrompt,
-                        ragContext,
-                        { includeSourceNames: true }
-                    ),
+                    systemPrompt: ragSystemPrompt,
                 };
+                if (ragContext.relevantSections) {
+                    finalPrompt.sectionContext = ragContext.relevantSections;
+                }
             }
 
             // Generate document
@@ -450,8 +497,10 @@ export class UnifiedDocumentService {
                 config: {
                     temperature: config.temperature,
                     maxTokens: config.maxTokens,
-                    documentId,
                 },
+                userId: config.userId,
+                documentId,
+                onProgress: (progress) => this.handleProgress(documentId, progress)
             });
 
             // Add RAG context to result
@@ -467,6 +516,9 @@ export class UnifiedDocumentService {
             }
 
             return result;
+        } catch (error) {
+            console.error('Document generation failed:', error);
+            throw new Error('Document generation failed');
         } finally {
             // Cleanup progress
             await this.redis.del(progressKey);
@@ -499,6 +551,53 @@ export class UnifiedDocumentService {
             documentId: result.documentId,
         });
     }
+
+    private buildRAGSystemPrompt(
+        basePrompt: string,
+        ragContext: RAGContext,
+        documentType: string
+    ): string {
+        let enhancedPrompt = basePrompt;
+
+        // Add general RAG instructions
+        enhancedPrompt += `\n\nYou have access to the following relevant information from the user's knowledge base:\n\n`;
+
+        // Add source summaries
+        ragContext.sources.forEach((source, index) => {
+            enhancedPrompt += `[Source ${index + 1}: ${source.name}]\n`;
+            enhancedPrompt += `${source.content}\n\n`;
+        });
+
+        // Add instructions for using the context
+        enhancedPrompt += `Please incorporate relevant information from these sources naturally into the document. `;
+        enhancedPrompt += `Ensure the information is accurate and properly integrated. `;
+        enhancedPrompt += `If the sources contain conflicting information, use the most relevant and reliable content.\n`;
+
+        return enhancedPrompt;
+    }
+
+    async checkRAGAvailability(userId: string): Promise<{
+        available: boolean;
+        sourceCount: number;
+        message?: string;
+    }> {
+        const sources = await this.db.knowledgeSource.count({
+            where: {
+                userId,
+                status: 'COMPLETED',
+            },
+        });
+
+        return {
+            available: sources > 0,
+            sourceCount: sources,
+            message: sources === 0
+                ? 'Upload knowledge sources to enable RAG enhancement'
+                : undefined,
+        };
+    }
+
+
 
     /**
      * Update document with generated content
@@ -600,4 +699,48 @@ export class UnifiedDocumentService {
 
         return defaults[provider] || 'gpt-4-turbo-preview';
     }
+}
+
+export async function getRAGStatus(
+    userId: string,
+    documentType: DocumentType
+): Promise<{
+    enabled: boolean;
+    availableSources: number;
+    suggestedQueries: string[];
+}> {
+    const db = (await import('~/server/db')).db;
+
+    const sources = await db.knowledgeSource.findMany({
+        where: {
+            userId,
+            status: 'COMPLETED',
+        },
+        select: {
+            id: true,
+            name: true,
+            tags: true,
+        },
+    });
+
+    // Generate suggested queries based on document type
+    const suggestedQueries: string[] = [];
+
+    switch (documentType) {
+        case 'BIOGRAPHY':
+            suggestedQueries.push('personal history', 'achievements', 'career highlights');
+            break;
+        case 'BUSINESS_PLAN':
+            suggestedQueries.push('market analysis', 'competitor research', 'financial data');
+            break;
+        case 'GRANT_PROPOSAL':
+            suggestedQueries.push('research data', 'impact studies', 'methodology');
+            break;
+    }
+
+    return {
+        enabled: sources.length > 0,
+        availableSources: sources.length,
+        suggestedQueries,
+    };
 }

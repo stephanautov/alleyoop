@@ -1,7 +1,7 @@
 // src/app/admin/generators/components/validation-dialog.tsx
+"use client";
 
-import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
-import { Button } from "~/components/ui/button";
+import { AlertCircle, AlertTriangle, CheckCircle, Info } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -10,94 +10,114 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
-import { AlertCircle, AlertTriangle, Lightbulb } from "lucide-react";
+import { Button } from "~/components/ui/button";
+import { Alert, AlertDescription } from "~/components/ui/alert";
+import { ScrollArea } from "~/components/ui/scroll-area";
+
+interface ValidationResult {
+  valid: boolean;
+  conflicts: string[];
+  warnings: string[];
+  suggestions: string[];
+}
 
 interface ValidationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  validation: {
-    valid: boolean;
-    conflicts: string[];
-    warnings: string[];
-    suggestions: string[];
-  };
+  validation: ValidationResult | null;
   onConfirm: () => void;
-  onCancel: () => void;
 }
 
 export function ValidationDialog({
   open,
   onOpenChange,
   validation,
-  onConfirm,
-  onCancel,
+  onConfirm
 }: ValidationDialogProps) {
+  if (!validation) return null;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Generation Validation</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-yellow-500" />
+            Validation Results
+          </DialogTitle>
           <DialogDescription>
-            Review the following items before proceeding
+            Please review the following issues before proceeding
           </DialogDescription>
         </DialogHeader>
 
-        <div className="my-4 space-y-4">
-          {validation.conflicts.length > 0 && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Conflicts Found</AlertTitle>
-              <AlertDescription>
-                <ul className="mt-2 ml-4 list-disc">
-                  {validation.conflicts.map((conflict, i) => (
-                    <li key={i}>{conflict}</li>
-                  ))}
-                </ul>
-              </AlertDescription>
-            </Alert>
-          )}
+        <ScrollArea className="h-[400px] pr-4">
+          <div className="space-y-4">
+            {/* Conflicts */}
+            {validation.conflicts.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="font-medium flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 text-red-500" />
+                  Conflicts
+                </h4>
+                {validation.conflicts.map((conflict, index) => (
+                  <Alert key={index} variant="destructive">
+                    <AlertDescription>{conflict}</AlertDescription>
+                  </Alert>
+                ))}
+              </div>
+            )}
 
-          {validation.warnings.length > 0 && (
-            <Alert>
-              <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Warnings</AlertTitle>
-              <AlertDescription>
-                <ul className="mt-2 ml-4 list-disc">
-                  {validation.warnings.map((warning, i) => (
-                    <li key={i}>{warning}</li>
-                  ))}
-                </ul>
-              </AlertDescription>
-            </Alert>
-          )}
+            {/* Warnings */}
+            {validation.warnings.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="font-medium flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-yellow-500" />
+                  Warnings
+                </h4>
+                {validation.warnings.map((warning, index) => (
+                  <Alert key={index} className="border-yellow-200 bg-yellow-50">
+                    <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                    <AlertDescription className="text-yellow-800">
+                      {warning}
+                    </AlertDescription>
+                  </Alert>
+                ))}
+              </div>
+            )}
 
-          {validation.suggestions.length > 0 && (
-            <Alert className="border-blue-200 bg-blue-50">
-              <Lightbulb className="h-4 w-4 text-blue-600" />
-              <AlertTitle className="text-blue-900">Suggestions</AlertTitle>
-              <AlertDescription className="text-blue-800">
-                <ul className="mt-2 ml-4 list-disc">
-                  {validation.suggestions.map((suggestion, i) => (
-                    <li key={i}>{suggestion}</li>
-                  ))}
-                </ul>
-              </AlertDescription>
-            </Alert>
-          )}
-        </div>
+            {/* Suggestions */}
+            {validation.suggestions.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="font-medium flex items-center gap-2">
+                  <Info className="h-4 w-4 text-blue-500" />
+                  Suggestions
+                </h4>
+                {validation.suggestions.map((suggestion, index) => (
+                  <Alert key={index} className="border-blue-200 bg-blue-50">
+                    <Info className="h-4 w-4 text-blue-600" />
+                    <AlertDescription className="text-blue-800">
+                      {suggestion}
+                    </AlertDescription>
+                  </Alert>
+                ))}
+              </div>
+            )}
+          </div>
+        </ScrollArea>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onCancel}>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button
-            onClick={onConfirm}
-            variant={
-              validation.conflicts.length > 0 ? "destructive" : "default"
-            }
-          >
-            {validation.conflicts.length > 0 ? "Force Generate" : "Continue"}
-          </Button>
+          {validation.valid ? (
+            <Button onClick={onConfirm}>
+              <CheckCircle className="h-4 w-4 mr-2" />
+              Proceed
+            </Button>
+          ) : (
+            <Button onClick={onConfirm} variant="destructive">
+              Force Generate
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -1,40 +1,22 @@
 // src/app/admin/generators/page.tsx
-
 "use client";
 
 import { useState, useEffect } from "react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Button } from "~/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Badge } from "~/components/ui/badge";
 import { Textarea } from "~/components/ui/textarea";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "~/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { Separator } from "~/components/ui/separator";
+import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { Alert, AlertDescription } from "~/components/ui/alert";
+import { Progress } from "~/components/ui/progress";
 import { toast } from "sonner";
 import { api } from "~/trpc/react";
 import {
@@ -53,9 +35,27 @@ import {
   History,
   FileCode,
   Sparkles,
+  Package,
+  Zap,
+  Clock,
+  TrendingUp,
+  Terminal,
+  Download,
+  Upload,
+  Users,
+  BarChart,
+  X
 } from "lucide-react";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { useSession } from "next-auth/react";
+import { cn } from "~/lib/utils";
+
+// Import components
+import { BulkGenerateDialog } from "./components/bulk-generate-dialog";
+import { MetricsDashboard } from "./components/metrics-dashboard";
+import { RateLimitIndicator } from "./components/rate-limit-indicator";
+import { ValidationDialog } from "./components/validation-dialog";
 
 interface GeneratedFile {
   path: string;
@@ -68,593 +68,680 @@ interface Template {
   name: string;
   description?: string;
   generator: string;
-  config: Record<string, any>;
+  config: any;
 }
 
-interface GeneratorHistory {
+interface StreamMessage {
+  type: 'output' | 'log' | 'error' | 'complete' | 'file' | 'progress';
+  data: any;
+}
+
+interface GeneratorTab {
   id: string;
-  sessionId: string;
-  generator: string;
-  createdAt: Date;
-  filesGenerated?: number;
+  name: string;
+  icon: React.ComponentType<{ className?: string }>;
+  description: string;
 }
 
-interface GeneratorOutput {
-  type: "log" | "error" | "file" | "complete";
-  message?: string;
-  file?: string;
-  sessionId?: string;
-}
+const generatorTabs: GeneratorTab[] = [
+  {
+    id: "router",
+    name: "tRPC Router",
+    icon: Code2,
+    description: "Generate a new tRPC router with CRUD operations"
+  },
+  {
+    id: "component",
+    name: "React Component",
+    icon: Component,
+    description: "Create a new React component with TypeScript"
+  },
+  {
+    id: "document",
+    name: "Document Type",
+    icon: FileText,
+    description: "Add a new document type with schemas and prompts"
+  },
+  {
+    id: "feature",
+    name: "Full Feature",
+    icon: Rocket,
+    description: "Generate a complete feature with UI, API, and database"
+  },
+  {
+    id: "test",
+    name: "Test Suite",
+    icon: TestTube,
+    description: "Create test files for existing code"
+  }
+];
 
-export default function EnhancedGeneratorsPage() {
+export default function GeneratorsPage() {
+  const { data: session } = useSession();
+  const [selectedGenerator, setSelectedGenerator] = useState("router");
   const [isGenerating, setIsGenerating] = useState(false);
-  const [generatedFiles, setGeneratedFiles] = useState<GeneratedFile[]>([]);
-  const [streamOutput, setStreamOutput] = useState<string[]>([]);
   const [showPreview, setShowPreview] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<GeneratedFile | null>(null);
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
-  const [showTemplateDialog, setShowTemplateDialog] = useState(false);
-  const [templateName, setTemplateName] = useState("");
-  const [templateDescription, setTemplateDescription] = useState("");
+  const [previewFiles, setPreviewFiles] = useState<GeneratedFile[]>([]);
+  const [streamOutput, setStreamOutput] = useState<string[]>([]);
+  const [showOutput, setShowOutput] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [showMetrics, setShowMetrics] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [showValidation, setShowValidation] = useState(false);
+  const [validationResults, setValidationResults] = useState<any>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<string>("");
 
-  // Router generator state
+  // Generator-specific state
   const [routerName, setRouterName] = useState("");
   const [routerModel, setRouterModel] = useState("");
   const [includeCrud, setIncludeCrud] = useState(true);
 
-  // Check permissions
-  const { data: permissions } = api.generators.checkPermissions.useQuery();
+  const [componentName, setComponentName] = useState("");
+  const [componentType, setComponentType] = useState("client");
+  const [includeTests, setIncludeTests] = useState(false);
 
-  // Get templates
-  const { data: templates = [] } = api.generators.listTemplates.useQuery({
-    generator: "router", // Change based on current tab
+  const [documentTypeName, setDocumentTypeName] = useState("");
+  const [documentDescription, setDocumentDescription] = useState("");
+
+  const [featureName, setFeatureName] = useState("");
+  const [featureModules, setFeatureModules] = useState({
+    ui: true,
+    api: true,
+    db: true,
+    tests: false
   });
 
-  // Get history
-  const { data: history = [] } = api.generators.getHistory.useQuery({
-    limit: 5,
+  const [testTarget, setTestTarget] = useState("");
+  const [testType, setTestType] = useState("unit");
+
+  // API hooks
+  const { data: templates } = api.generators.listTemplates.useQuery();
+  const { data: history } = api.generators.getHistory.useQuery(undefined, {
+    enabled: showHistory
+  });
+  const { data: metrics } = api.generators.getMetrics.useQuery(undefined, {
+    enabled: showMetrics
   });
 
-  // Subscribe to streaming output
-  useEffect(() => {
-    if (!currentSessionId) return;
-
-    const subscription = api.generators.streamGeneration.subscribe(
-      { sessionId: currentSessionId },
-      {
-        onData: (data) => {
-          if (data.type === "log") {
-            setStreamOutput((prev) => [...prev, data.message || ""]);
-          } else if (data.type === "error") {
-            toast.error(data.message || "Generation error");
-          } else if (data.type === "file") {
-            toast.success(`Generated: ${data.file}`);
-          } else if (data.type === "complete") {
-            setIsGenerating(false);
-            toast.success("Generation complete!");
-          }
-        },
-        onError: (err) => {
-          toast.error("Streaming error: " + err.message);
-          setIsGenerating(false);
-        },
-      },
-    );
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [currentSessionId]);
-
-  // Mutations
-  const generateRouterMutation =
-    api.generators.generateRouterWithPreview.useMutation({
-      onSuccess: async (data) => {
-        setCurrentSessionId(data.sessionId);
-
-        if (!showPreview) {
-          toast.success("Router generated successfully!");
-        }
-
-        // Get generated files
-        const files = await api.generators.getGeneratedFiles.query({
-          sessionId: data.sessionId,
-        });
-        setGeneratedFiles(files);
-      },
-      onError: (error) => {
-        toast.error(error.message || "Failed to generate router");
-        setIsGenerating(false);
-      },
-    });
-
-  const undoMutation = api.generators.undoGeneration.useMutation({
-    onSuccess: (data) => {
-      if (data.success) {
-        toast.success(`Deleted ${data.deleted.length} files`);
-        setGeneratedFiles([]);
-        setCurrentSessionId(null);
+  const generateMutation = api.generators.generateRouterWithValidation.useMutation({
+    onSuccess: (data: any) => {
+      if (data.needsConfirmation) {
+        setValidationResults(data.validation);
+        setShowValidation(true);
       } else {
-        data.errors.forEach((err) => toast.error(err));
+        toast.success("Generation completed successfully!");
+        resetForm();
       }
     },
+    onError: (error: any) => {
+      toast.error(error.message);
+      setIsGenerating(false);
+    }
+  });
+
+  const undoMutation = api.generators.undoGeneration.useMutation({
+    onSuccess: () => {
+      toast.success("Generation undone successfully!");
+    },
+    onError: (error: any) => {
+      toast.error(error.message);
+    }
   });
 
   const saveTemplateMutation = api.generators.saveTemplate.useMutation({
     onSuccess: () => {
-      toast.success("Template saved!");
-      setShowTemplateDialog(false);
-      setTemplateName("");
-      setTemplateDescription("");
-    },
+      toast.success("Template saved successfully!");
+    }
   });
 
-  // Handlers
-  const handleGenerateRouter = async (preview = false) => {
-    if (!routerName) {
-      toast.error("Please enter a router name");
-      return;
+  // Subscribe to streaming updates
+  api.generators.streamGeneration.useSubscription(
+    { sessionId: generateMutation.data?.sessionId || "" },
+    {
+      enabled: !!generateMutation.data?.sessionId && isGenerating,
+      onData: (message: StreamMessage) => {
+        switch (message.type) {
+          case 'output':
+          case 'log':
+            setStreamOutput(prev => [...prev, message.data]);
+            break;
+          case 'file':
+            setPreviewFiles(prev => [...prev, message.data]);
+            break;
+          case 'progress':
+            setProgress(message.data);
+            break;
+          case 'complete':
+            setIsGenerating(false);
+            setProgress(100);
+            break;
+          case 'error':
+            toast.error(message.data);
+            setIsGenerating(false);
+            break;
+        }
+      }
     }
+  );
 
-    if (!permissions?.canGenerate) {
-      toast.error("You don't have permission to generate code");
-      return;
-    }
-
-    setIsGenerating(true);
+  const resetForm = () => {
+    setRouterName("");
+    setRouterModel("");
+    setComponentName("");
+    setDocumentTypeName("");
+    setDocumentDescription("");
+    setFeatureName("");
+    setTestTarget("");
     setStreamOutput([]);
-    setShowPreview(preview);
-
-    await generateRouterMutation.mutateAsync({
-      name: routerName,
-      model: routerModel || undefined,
-      crud: includeCrud,
-      preview,
-    });
+    setPreviewFiles([]);
+    setProgress(0);
   };
 
-  const handleUndo = async () => {
-    if (!currentSessionId || !permissions?.canUndo) {
-      toast.error("Cannot undo this generation");
-      return;
-    }
+  const handleGenerate = async (preview = false) => {
+    setIsGenerating(true);
+    setStreamOutput([]);
+    setPreviewFiles([]);
+    setShowOutput(true);
+    setProgress(0);
 
-    await undoMutation.mutateAsync({ sessionId: currentSessionId });
+    const baseConfig = {
+      preview,
+      force: false
+    };
+
+    try {
+      switch (selectedGenerator) {
+        case "router":
+          await generateMutation.mutateAsync({
+            type: "router",
+            name: routerName,
+            options: {
+              ...baseConfig,
+              model: routerModel,
+              crud: includeCrud
+            }
+          });
+          break;
+        case "component":
+          await generateMutation.mutateAsync({
+            type: "component",
+            name: componentName,
+            options: {
+              ...baseConfig,
+              type: componentType,
+              tests: includeTests
+            }
+          });
+          break;
+        case "document":
+          await generateMutation.mutateAsync({
+            type: "document",
+            name: documentTypeName,
+            options: {
+              ...baseConfig,
+              description: documentDescription
+            }
+          });
+          break;
+        case "feature":
+          await generateMutation.mutateAsync({
+            type: "feature",
+            name: featureName,
+            options: {
+              ...baseConfig,
+              modules: featureModules
+            }
+          });
+          break;
+        case "test":
+          await generateMutation.mutateAsync({
+            type: "test",
+            name: testTarget,
+            options: {
+              ...baseConfig,
+              type: testType
+            }
+          });
+          break;
+      }
+
+      if (preview) {
+        setShowPreview(true);
+      }
+    } catch (error) {
+      // Error handled by mutation
+    }
   };
 
   const handleSaveTemplate = async () => {
     const config = {
-      name: routerName,
-      model: routerModel,
-      crud: includeCrud,
-    };
+      router: { name: routerName, model: routerModel, crud: includeCrud },
+      component: { name: componentName, type: componentType, tests: includeTests },
+      document: { name: documentTypeName, description: documentDescription },
+      feature: { name: featureName, modules: featureModules },
+      test: { target: testTarget, type: testType }
+    }[selectedGenerator];
 
-    await saveTemplateMutation.mutateAsync({
-      name: templateName,
-      description: templateDescription,
-      generator: "router",
-      config,
-    });
+    const name = prompt("Template name:");
+    const description = prompt("Template description (optional):");
+
+    if (name) {
+      await saveTemplateMutation.mutateAsync({
+        name,
+        description: description || undefined,
+        generator: selectedGenerator,
+        config
+      });
+    }
   };
 
-  const handleLoadTemplate = (template: Template) => {
-    const config = template.config as {
-      name?: string;
-      model?: string;
-      crud?: boolean;
-    };
+  const loadTemplate = (templateId: string) => {
+    const template = templates?.find((t: Template) => t.id === templateId);
+    if (!template) return;
 
-    setRouterName(config.name || "");
-    setRouterModel(config.model || "");
-    setIncludeCrud(config.crud ?? true);
-    toast.success(`Loaded template: ${template.name}`);
+    const config = template.config as any;
+    switch (template.generator) {
+      case "router":
+        setRouterName(config.name || "");
+        setRouterModel(config.model || "");
+        setIncludeCrud(config.crud ?? true);
+        break;
+      case "component":
+        setComponentName(config.name || "");
+        setComponentType(config.type || "client");
+        setIncludeTests(config.tests || false);
+        break;
+      // ... other generators
+    }
   };
+
+  // Check permissions
+  const canGenerate = (session?.user as any)?.role === "ADMIN" || (session?.user as any)?.role === "DEVELOPER";
+
+  if (!canGenerate) {
+    return (
+      <div className="container mx-auto py-6">
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            You don't have permission to access code generators. Please contact an admin.
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
 
   return (
-    <div className="container mx-auto max-w-7xl py-6">
-      <div className="mb-8 flex items-center justify-between">
+    <div className="container mx-auto py-6 space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Code Generators</h1>
-          <p className="text-muted-foreground">
-            Generate boilerplate code with preview, templates, and undo
+          <h1 className="text-3xl font-bold flex items-center gap-2">
+            <Sparkles className="h-8 w-8 text-primary" />
+            Code Generators
+          </h1>
+          <p className="text-muted-foreground mt-2">
+            Generate boilerplate code with best practices built-in
           </p>
         </div>
-
-        {/* Permission badges */}
-        <div className="flex gap-2">
-          {permissions?.canGenerate && (
-            <Badge variant="secondary">
-              <CheckCircle2 className="mr-1 h-3 w-3" />
-              Can Generate
-            </Badge>
-          )}
-          {permissions?.canUndo && (
-            <Badge variant="secondary">
-              <Undo2 className="mr-1 h-3 w-3" />
-              Can Undo
-            </Badge>
-          )}
+        <div className="flex items-center gap-2">
+          <RateLimitIndicator />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowHistory(!showHistory)}
+          >
+            <History className="h-4 w-4 mr-2" />
+            History
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowMetrics(!showMetrics)}
+          >
+            <BarChart className="h-4 w-4 mr-2" />
+            Metrics
+          </Button>
+          <BulkGenerateDialog />
         </div>
       </div>
 
-      <div className="grid grid-cols-12 gap-6">
-        {/* Main content */}
-        <div className="col-span-8">
-          <Tabs defaultValue="router" className="space-y-4">
-            <TabsList className="grid w-full grid-cols-5">
-              <TabsTrigger value="router" className="flex items-center gap-2">
-                <Code2 className="h-4 w-4" />
-                Router
-              </TabsTrigger>
-              <TabsTrigger
-                value="component"
-                className="flex items-center gap-2"
-              >
-                <Component className="h-4 w-4" />
-                Component
-              </TabsTrigger>
-              <TabsTrigger value="document" className="flex items-center gap-2">
-                <FileText className="h-4 w-4" />
-                Document
-              </TabsTrigger>
-              <TabsTrigger value="test" className="flex items-center gap-2">
-                <TestTube className="h-4 w-4" />
-                Test
-              </TabsTrigger>
-              <TabsTrigger value="feature" className="flex items-center gap-2">
-                <Rocket className="h-4 w-4" />
-                Feature
-              </TabsTrigger>
-            </TabsList>
+      {/* Metrics Dashboard */}
+      {showMetrics && <MetricsDashboard metrics={metrics} />}
 
-            <TabsContent value="router">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Generate tRPC Router</CardTitle>
-                  <CardDescription>
-                    Create a new tRPC router with optional CRUD operations
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {/* Template selector */}
-                  {templates.length > 0 && (
-                    <div className="space-y-2">
-                      <Label htmlFor="template">Use Template</Label>
-                      <Select
-                        value={selectedTemplate}
-                        onValueChange={(id) => {
-                          const template = templates.find((t) => t.id === id);
-                          if (template) handleLoadTemplate(template);
-                        }}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a template" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {templates.map((template) => (
-                            <SelectItem key={template.id} value={template.id}>
-                              <div>
-                                <div className="font-medium">
+      {/* Main Content */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Generator Form */}
+        <div className="lg:col-span-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>Generator Configuration</CardTitle>
+              <CardDescription>
+                Choose a generator and configure options
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Tabs value={selectedGenerator} onValueChange={setSelectedGenerator}>
+                <TabsList className="grid grid-cols-5 w-full">
+                  {generatorTabs.map((tab) => (
+                    <TabsTrigger
+                      key={tab.id}
+                      value={tab.id}
+                      className="flex items-center gap-2"
+                    >
+                      <tab.icon className="h-4 w-4" />
+                      <span className="hidden sm:inline">{tab.name}</span>
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+
+                {/* Router Generator */}
+                <TabsContent value="router" className="space-y-4">
+                  <div className="space-y-4">
+                    {/* Template Selector */}
+                    {templates && templates.filter((t: Template) => t.generator === "router").length > 0 && (
+                      <div>
+                        <Label>Load Template</Label>
+                        <Select value={selectedTemplate} onValueChange={loadTemplate}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a template" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {templates
+                              .filter((t: Template) => t.generator === "router")
+                              .map((template: Template) => (
+                                <SelectItem key={template.id} value={template.id}>
                                   {template.name}
-                                </div>
-                                {template.description && (
-                                  <div className="text-muted-foreground text-xs">
-                                    {template.description}
-                                  </div>
-                                )}
-                              </div>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
+                    <div>
+                      <Label htmlFor="router-name">Router Name</Label>
+                      <Input
+                        id="router-name"
+                        placeholder="e.g., user, product, analytics"
+                        value={routerName}
+                        onChange={(e) => setRouterName(e.target.value)}
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Will create: src/server/api/routers/{routerName}.ts
+                      </p>
                     </div>
-                  )}
 
-                  <div className="space-y-2">
-                    <Label htmlFor="router-name">Router Name</Label>
-                    <Input
-                      id="router-name"
-                      placeholder="e.g., user, document, analytics"
-                      value={routerName}
-                      onChange={(e) => setRouterName(e.target.value)}
-                    />
+                    <div>
+                      <Label htmlFor="router-model">Prisma Model (Optional)</Label>
+                      <Input
+                        id="router-model"
+                        placeholder="e.g., User, Product"
+                        value={routerModel}
+                        onChange={(e) => setRouterModel(e.target.value)}
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Leave empty to use router name as model
+                      </p>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="include-crud"
+                        checked={includeCrud}
+                        onCheckedChange={(checked) => setIncludeCrud(!!checked)}
+                      />
+                      <Label
+                        htmlFor="include-crud"
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                      >
+                        Include CRUD operations
+                      </Label>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={() => handleGenerate(true)}
+                        disabled={isGenerating || !routerName}
+                        variant="outline"
+                      >
+                        <Eye className="h-4 w-4 mr-2" />
+                        Preview
+                      </Button>
+                      <Button
+                        onClick={() => handleGenerate(false)}
+                        disabled={isGenerating || !routerName}
+                      >
+                        {isGenerating ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <Rocket className="h-4 w-4 mr-2" />
+                        )}
+                        Generate
+                      </Button>
+                      <Button
+                        onClick={handleSaveTemplate}
+                        variant="ghost"
+                        size="icon"
+                        disabled={!routerName}
+                      >
+                        <Save className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="router-model">
-                      Prisma Model Name (optional)
-                    </Label>
-                    <Input
-                      id="router-model"
-                      placeholder="Leave empty to use router name"
-                      value={routerModel}
-                      onChange={(e) => setRouterModel(e.target.value)}
-                    />
+                </TabsContent>
+
+                {/* Component Generator */}
+                <TabsContent value="component" className="space-y-4">
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="component-name">Component Name</Label>
+                      <Input
+                        id="component-name"
+                        placeholder="e.g., UserProfile, Dashboard"
+                        value={componentName}
+                        onChange={(e) => setComponentName(e.target.value)}
+                      />
+                    </div>
+
+                    <div>
+                      <Label>Component Type</Label>
+                      <RadioGroup value={componentType} onValueChange={setComponentType}>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="client" id="client" />
+                          <Label htmlFor="client">Client Component</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="server" id="server" />
+                          <Label htmlFor="server">Server Component</Label>
+                        </div>
+                      </RadioGroup>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="include-tests"
+                        checked={includeTests}
+                        onCheckedChange={(checked) => setIncludeTests(!!checked)}
+                      />
+                      <Label htmlFor="include-tests">Include test file</Label>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={() => handleGenerate(true)}
+                        disabled={isGenerating || !componentName}
+                        variant="outline"
+                      >
+                        <Eye className="h-4 w-4 mr-2" />
+                        Preview
+                      </Button>
+                      <Button
+                        onClick={() => handleGenerate(false)}
+                        disabled={isGenerating || !componentName}
+                      >
+                        {isGenerating ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <Component className="h-4 w-4 mr-2" />
+                        )}
+                        Generate
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="include-crud"
-                      checked={includeCrud}
-                      onCheckedChange={(checked) => setIncludeCrud(!!checked)}
-                    />
-                    <Label htmlFor="include-crud">
-                      Include CRUD operations
-                    </Label>
-                  </div>
+                </TabsContent>
 
-                  <div className="flex gap-2">
-                    <Button
-                      onClick={() => handleGenerateRouter(true)}
-                      disabled={isGenerating || !routerName}
-                      variant="outline"
-                      className="flex-1"
-                    >
-                      <Eye className="mr-2 h-4 w-4" />
-                      Preview
-                    </Button>
-                    <Button
-                      onClick={() => handleGenerateRouter(false)}
-                      disabled={isGenerating || !routerName}
-                      className="flex-1"
-                    >
-                      {isGenerating && (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      )}
-                      Generate
-                    </Button>
-                  </div>
+                {/* Other generators follow similar pattern... */}
+              </Tabs>
+            </CardContent>
+          </Card>
 
-                  {/* Save as template button */}
-                  {routerName && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setShowTemplateDialog(true)}
-                      className="w-full"
-                    >
-                      <Save className="mr-2 h-4 w-4" />
-                      Save as Template
-                    </Button>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* Other tabs would follow similar pattern */}
-          </Tabs>
-
-          {/* Stream output */}
-          {streamOutput.length > 0 && (
-            <Card className="mt-4">
+          {/* Output Console */}
+          {showOutput && (
+            <Card className="mt-6">
               <CardHeader>
-                <CardTitle className="text-sm">Generation Output</CardTitle>
+                <CardTitle className="flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <Terminal className="h-5 w-5" />
+                    Generation Output
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowOutput(false)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <ScrollArea className="h-48 w-full rounded-md border bg-black p-3">
-                  <div className="font-mono text-xs text-green-400">
-                    {streamOutput.map((line, i) => (
-                      <div key={i}>{line}</div>
-                    ))}
-                  </div>
+                {progress > 0 && progress < 100 && (
+                  <Progress value={progress} className="mb-4" />
+                )}
+                <ScrollArea className="h-[200px] w-full rounded-md border p-4 font-mono text-sm">
+                  {streamOutput.map((line, index) => (
+                    <div key={index} className="mb-1">
+                      {line}
+                    </div>
+                  ))}
                 </ScrollArea>
               </CardContent>
             </Card>
           )}
+        </div>
 
-          {/* Generated files */}
-          {generatedFiles.length > 0 && (
-            <Card className="mt-4">
+        {/* History Sidebar */}
+        {showHistory && (
+          <div className="lg:col-span-1">
+            <Card>
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
-                  <span className="flex items-center gap-2">
-                    <CheckCircle2 className="h-5 w-5 text-green-500" />
-                    Generated Files
-                  </span>
-                  {currentSessionId && permissions?.canUndo && !showPreview && (
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={handleUndo}
-                    >
-                      <Undo2 className="mr-2 h-4 w-4" />
-                      Undo Generation
-                    </Button>
-                  )}
+                  <span>Generation History</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowHistory(false)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
                 </CardTitle>
-                <CardDescription>
-                  Click on a file to view its content
-                </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-2">
-                  {generatedFiles.map((file, index) => (
+                <ScrollArea className="h-[400px]">
+                  {history?.map((item: any) => (
                     <div
-                      key={index}
-                      className="hover:bg-muted flex cursor-pointer items-center gap-2 rounded-md p-2"
-                      onClick={() => setSelectedFile(file)}
+                      key={item.sessionId}
+                      className="mb-4 p-3 rounded-lg border hover:bg-muted/50 transition-colors"
                     >
-                      <FileCode className="text-muted-foreground h-4 w-4" />
-                      <span className="font-mono text-sm">{file.path}</span>
-                      <Badge variant="secondary" className="ml-auto">
-                        {file.language}
-                      </Badge>
+                      <div className="flex items-center justify-between mb-2">
+                        <Badge variant="secondary">{item.generator}</Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(item.createdAt).toLocaleString()}
+                        </span>
+                      </div>
+                      <p className="font-medium text-sm">{item.name}</p>
+                      <div className="flex items-center gap-2 mt-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => undoMutation.mutate({ sessionId: item.sessionId })}
+                          disabled={item.undone}
+                        >
+                          <Undo2 className="h-3 w-3 mr-1" />
+                          Undo
+                        </Button>
+                      </div>
                     </div>
                   ))}
-                </div>
+                </ScrollArea>
               </CardContent>
             </Card>
-          )}
-        </div>
-
-        {/* Sidebar */}
-        <div className="col-span-4 space-y-4">
-          {/* Recent generations */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-sm">
-                <History className="h-4 w-4" />
-                Recent Generations
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {history.length === 0 ? (
-                <p className="text-muted-foreground text-sm">
-                  No recent generations
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {history.map((session: GeneratorHistory) => (
-                    <div
-                      key={session.id}
-                      className="flex items-center justify-between p-2 rounded hover:bg-muted/50 cursor-pointer"
-                      onClick={() => {/* Handle history item click */ }}
-                    >
-                      <div>
-                        <p className="text-sm font-medium">{session.generator}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(session.createdAt).toLocaleString()}
-                        </p>
-                      </div>
-                      {session.filesGenerated && (
-                        <Badge variant="secondary">
-                          {session.filesGenerated} files
-                        </Badge>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Tips */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-sm">
-                <Sparkles className="h-4 w-4" />
-                Pro Tips
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <div className="text-sm">
-                <p className="font-medium">Preview First</p>
-                <p className="text-muted-foreground text-xs">
-                  Always preview before generating to avoid conflicts
-                </p>
-              </div>
-              <Separator />
-              <div className="text-sm">
-                <p className="font-medium">Use Templates</p>
-                <p className="text-muted-foreground text-xs">
-                  Save time by creating templates for common patterns
-                </p>
-              </div>
-              <Separator />
-              <div className="text-sm">
-                <p className="font-medium">Undo Quickly</p>
-                <p className="text-muted-foreground text-xs">
-                  You can undo generations if files haven't been modified
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+          </div>
+        )}
       </div>
 
-      {/* File preview dialog */}
-      {selectedFile && (
-        <Dialog
-          open={!!selectedFile}
-          onOpenChange={() => setSelectedFile(null)}
-        >
-          <DialogContent className="max-h-[80vh] max-w-4xl">
-            <DialogHeader>
-              <DialogTitle className="font-mono text-sm">
-                {selectedFile.path}
-              </DialogTitle>
-            </DialogHeader>
-            <ScrollArea className="h-[60vh] w-full rounded-md border">
-              <SyntaxHighlighter
-                language={selectedFile.language}
-                style={vscDarkPlus}
-                customStyle={{ margin: 0 }}
-              >
-                {selectedFile.content}
-              </SyntaxHighlighter>
-            </ScrollArea>
-            <DialogFooter>
-              {showPreview ? (
-                <div className="flex w-full gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => setSelectedFile(null)}
-                    className="flex-1"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      setSelectedFile(null);
-                      setShowPreview(false);
-                      handleGenerateRouter(false);
-                    }}
-                    className="flex-1"
-                  >
-                    Generate Files
-                  </Button>
-                </div>
-              ) : (
-                <Button onClick={() => setSelectedFile(null)}>Close</Button>
-              )}
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
-
-      {/* Save template dialog */}
-      <Dialog open={showTemplateDialog} onOpenChange={setShowTemplateDialog}>
-        <DialogContent>
+      {/* Preview Dialog */}
+      <Dialog open={showPreview} onOpenChange={setShowPreview}>
+        <DialogContent className="max-w-4xl max-h-[80vh]">
           <DialogHeader>
-            <DialogTitle>Save as Template</DialogTitle>
+            <DialogTitle>Preview Generated Files</DialogTitle>
             <DialogDescription>
-              Save this configuration as a reusable template
+              Review the files that will be generated. Click Generate to create them.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="template-name">Template Name</Label>
-              <Input
-                id="template-name"
-                value={templateName}
-                onChange={(e) => setTemplateName(e.target.value)}
-                placeholder="e.g., CRUD Router with Auth"
-              />
+          <ScrollArea className="h-[500px]">
+            <div className="space-y-4">
+              {previewFiles.map((file, index) => (
+                <div key={index} className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <FileCode className="h-4 w-4" />
+                    <span className="font-mono text-sm">{file.path}</span>
+                  </div>
+                  <div className="rounded-md border overflow-hidden">
+                    <SyntaxHighlighter
+                      language={file.language}
+                      style={vscDarkPlus}
+                      customStyle={{
+                        margin: 0,
+                        fontSize: '0.875rem',
+                        maxHeight: '300px'
+                      }}
+                    >
+                      {file.content}
+                    </SyntaxHighlighter>
+                  </div>
+                </div>
+              ))}
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="template-description">
-                Description (optional)
-              </Label>
-              <Textarea
-                id="template-description"
-                value={templateDescription}
-                onChange={(e) => setTemplateDescription(e.target.value)}
-                placeholder="Describe when to use this template"
-              />
-            </div>
-          </div>
+          </ScrollArea>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowTemplateDialog(false)}
-            >
+            <Button variant="outline" onClick={() => setShowPreview(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSaveTemplate} disabled={!templateName}>
-              Save Template
+            <Button onClick={() => {
+              setShowPreview(false);
+              handleGenerate(false);
+            }}>
+              <Rocket className="h-4 w-4 mr-2" />
+              Generate Files
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+
+      {/* Validation Dialog */}
+      <ValidationDialog
+        open={showValidation}
+        onOpenChange={setShowValidation}
+        validation={validationResults}
+        onConfirm={() => {
+          setShowValidation(false);
+          // Re-run with force flag
+          handleGenerate(false);
+        }}
+      />
+    </div >
   );
 }
+
+

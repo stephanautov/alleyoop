@@ -1,0 +1,394 @@
+// src/app/dashboard/page.tsx
+"use client";
+
+import { useState, useEffect } from "react";
+import { useAuth, useUser } from "@clerk/nextjs";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { 
+  FileText, 
+  Plus, 
+  TrendingUp, 
+  Clock, 
+  CheckCircle,
+  AlertCircle,
+  Sparkles,
+  ArrowRight,
+  Calendar,
+  Target,
+  Zap,
+  User,
+  Briefcase,
+  FileSearch,
+  DollarSign,
+  BarChart3,
+  Activity
+} from "lucide-react";
+import { DocumentStatus, DocumentType } from "@/server/db/schema/documents";
+import { formatDistanceToNow } from "date-fns";
+
+// Mock data - replace with API calls
+const mockStats = {
+  totalDocuments: 24,
+  documentsThisMonth: 8,
+  tokensUsed: 125000,
+  tokenLimit: 500000,
+  timesSaved: "12 hours",
+  mostUsedType: DocumentType.BIOGRAPHY,
+};
+
+const mockRecentDocuments = [
+  {
+    id: "1",
+    title: "John Smith Biography",
+    type: DocumentType.BIOGRAPHY,
+    status: DocumentStatus.COMPLETED,
+    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
+  },
+  {
+    id: "2",
+    title: "Tech Startup Business Plan",
+    type: DocumentType.BUSINESS_PLAN,
+    status: DocumentStatus.PROCESSING,
+    createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000), // 5 hours ago
+  },
+  {
+    id: "3",
+    title: "Research Grant Proposal",
+    type: DocumentType.GRANT_PROPOSAL,
+    status: DocumentStatus.COMPLETED,
+    createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000), // 1 day ago
+  },
+];
+
+const documentTypeIcons = {
+  [DocumentType.BIOGRAPHY]: User,
+  [DocumentType.BUSINESS_PLAN]: Briefcase,
+  [DocumentType.CASE_SUMMARY]: FileSearch,
+  [DocumentType.GRANT_PROPOSAL]: DollarSign,
+};
+
+export default function DashboardPage() {
+  const { userId } = useAuth();
+  const { user } = useUser();
+  const router = useRouter();
+  const [isLoading, setIsLoading] = useState(true);
+  const [stats, setStats] = useState(mockStats);
+  const [recentDocuments, setRecentDocuments] = useState(mockRecentDocuments);
+
+  if (!userId) {
+    router.push("/sign-in");
+    return null;
+  }
+
+  useEffect(() => {
+    // Simulate loading
+    setTimeout(() => setIsLoading(false), 1000);
+  }, []);
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Good morning";
+    if (hour < 18) return "Good afternoon";
+    return "Good evening";
+  };
+
+  const tokenUsagePercentage = (stats.tokensUsed / stats.tokenLimit) * 100;
+
+  return (
+    <div className="container max-w-7xl mx-auto py-8 px-4">
+      {/* Header */}
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold mb-2">
+          {getGreeting()}, {user?.firstName || "there"}! 👋
+        </h1>
+        <p className="text-muted-foreground">
+          Here's your document creation overview
+        </p>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="grid gap-4 md:grid-cols-4 mb-8">
+        <Card className="border-primary/20 bg-primary/5 hover:shadow-md transition-shadow cursor-pointer" onClick={() => router.push("/documents/new")}>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center justify-between">
+              Create New
+              <Plus className="h-4 w-4 text-primary" />
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">Start a new document</p>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => router.push("/documents")}>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center justify-between">
+              View All
+              <FileText className="h-4 w-4 text-muted-foreground" />
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">Browse documents</p>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => router.push("/templates")}>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center justify-between">
+              Templates
+              <Sparkles className="h-4 w-4 text-muted-foreground" />
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">Use a template</p>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => router.push("/settings")}>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center justify-between">
+              Settings
+              <Target className="h-4 w-4 text-muted-foreground" />
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">Manage preferences</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Stats Overview */}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Documents</CardTitle>
+            <FileText className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <Skeleton className="h-8 w-16" />
+            ) : (
+              <>
+                <div className="text-2xl font-bold">{stats.totalDocuments}</div>
+                <p className="text-xs text-muted-foreground">
+                  +{stats.documentsThisMonth} this month
+                </p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Token Usage</CardTitle>
+            <Zap className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <Skeleton className="h-8 w-32" />
+            ) : (
+              <>
+                <div className="text-2xl font-bold">
+                  {(stats.tokensUsed / 1000).toFixed(0)}k
+                </div>
+                <Progress value={tokenUsagePercentage} className="mt-2" />
+                <p className="text-xs text-muted-foreground mt-1">
+                  {tokenUsagePercentage.toFixed(0)}% of {stats.tokenLimit / 1000}k limit
+                </p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Time Saved</CardTitle>
+            <Clock className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <Skeleton className="h-8 w-24" />
+            ) : (
+              <>
+                <div className="text-2xl font-bold">{stats.timesSaved}</div>
+                <p className="text-xs text-muted-foreground">
+                  Estimated vs manual writing
+                </p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Most Used</CardTitle>
+            <BarChart3 className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <Skeleton className="h-8 w-28" />
+            ) : (
+              <>
+                <div className="text-2xl font-bold capitalize">
+                  {stats.mostUsedType.toLowerCase().replace("_", " ")}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Document type preference
+                </p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Recent Documents & Activity */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Recent Documents</CardTitle>
+                <Button variant="ghost" size="sm" asChild>
+                  <Link href="/documents">
+                    View all
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="space-y-4">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="flex items-center justify-between">
+                      <div className="space-y-2">
+                        <Skeleton className="h-4 w-48" />
+                        <Skeleton className="h-3 w-32" />
+                      </div>
+                      <Skeleton className="h-8 w-20" />
+                    </div>
+                  ))}
+                </div>
+              ) : recentDocuments.length > 0 ? (
+                <div className="space-y-4">
+                  {recentDocuments.map((doc) => {
+                    const Icon = documentTypeIcons[doc.type];
+                    return (
+                      <div key={doc.id} className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors">
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                            <Icon className="h-5 w-5 text-primary" />
+                          </div>
+                          <div>
+                            <Link href={`/documents/${doc.id}`} className="font-medium hover:underline">
+                              {doc.title}
+                            </Link>
+                            <p className="text-sm text-muted-foreground">
+                              {formatDistanceToNow(doc.createdAt, { addSuffix: true })}
+                            </p>
+                          </div>
+                        </div>
+                        <Badge variant={doc.status === DocumentStatus.COMPLETED ? "success" : "default"}>
+                          {doc.status === DocumentStatus.PROCESSING && <Clock className="h-3 w-3 mr-1" />}
+                          {doc.status === DocumentStatus.COMPLETED && <CheckCircle className="h-3 w-3 mr-1" />}
+                          {doc.status}
+                        </Badge>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground">No documents yet</p>
+                  <Button className="mt-4" asChild>
+                    <Link href="/documents/new">
+                      Create your first document
+                    </Link>
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="space-y-6">
+          {/* Quick Tips */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-primary" />
+                Quick Tips
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>Pro tip:</strong> Use specific details in your inputs for more accurate and personalized documents.
+                </AlertDescription>
+              </Alert>
+              
+              <div className="mt-4 space-y-3">
+                <div className="flex gap-3">
+                  <div className="h-2 w-2 rounded-full bg-primary mt-2" />
+                  <p className="text-sm">Biography documents work best with detailed career information</p>
+                </div>
+                <div className="flex gap-3">
+                  <div className="h-2 w-2 rounded-full bg-primary mt-2" />
+                  <p className="text-sm">Save time by using templates for similar documents</p>
+                </div>
+                <div className="flex gap-3">
+                  <div className="h-2 w-2 rounded-full bg-primary mt-2" />
+                  <p className="text-sm">Export to DOCX for easy editing and sharing</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Usage Chart */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Activity className="h-5 w-5" />
+                This Week
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">Documents Created</span>
+                  <span className="font-medium">5</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">Tokens Used</span>
+                  <span className="font-medium">32.5k</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">Avg. Generation Time</span>
+                  <span className="font-medium">45s</span>
+                </div>
+              </div>
+              
+              <Button variant="outline" className="w-full mt-4" asChild>
+                <Link href="/analytics">
+                  View detailed analytics
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}

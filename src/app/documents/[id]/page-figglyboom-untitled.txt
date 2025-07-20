@@ -1,0 +1,513 @@
+// src/app/documents/[id]/page.tsx
+"use client";
+
+import { useState, useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { useAuth } from "@clerk/nextjs";
+import Link from "next/link";
+import { DocumentEditor } from "@/components/document-editor";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  ChevronLeft,
+  Download,
+  Edit,
+  Share2,
+  Clock,
+  Calendar,
+  FileText,
+  Hash,
+  Loader2,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  Eye,
+  Copy,
+  Trash2
+} from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { DocumentStatus, DocumentType } from "@/server/db/schema/documents";
+import { formatDistanceToNow, format } from "date-fns";
+import { toast } from "sonner";
+
+interface Document {
+  id: string;
+  title: string;
+  description?: string | null;
+  documentType: DocumentType;
+  status: DocumentStatus;
+  content: any;
+  metadata?: any;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const statusConfig = {
+  [DocumentStatus.DRAFT]: {
+    label: "Draft",
+    icon: Edit,
+    variant: "secondary" as const,
+    description: "This document is in draft mode"
+  },
+  [DocumentStatus.PENDING]: {
+    label: "Pending",
+    icon: Clock,
+    variant: "warning" as const,
+    description: "Document generation is queued"
+  },
+  [DocumentStatus.PROCESSING]: {
+    label: "Processing",
+    icon: Loader2,
+    variant: "default" as const,
+    description: "AI is generating your document"
+  },
+  [DocumentStatus.COMPLETED]: {
+    label: "Completed",
+    icon: CheckCircle,
+    variant: "success" as const,
+    description: "Document generated successfully"
+  },
+  [DocumentStatus.FAILED]: {
+    label: "Failed",
+    icon: XCircle,
+    variant: "destructive" as const,
+    description: "Document generation failed"
+  },
+  [DocumentStatus.ARCHIVED]: {
+    label: "Archived",
+    icon: FileText,
+    variant: "outline" as const,
+    description: "This document has been archived"
+  },
+};
+
+export default function DocumentDetailPage() {
+  const params = useParams();
+  const router = useRouter();
+  const { userId } = useAuth();
+  const [document, setDocument] = useState<Document | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("content");
+
+  const documentId = params.id as string;
+
+  if (!userId) {
+    router.push("/sign-in");
+    return null;
+  }
+
+  useEffect(() => {
+    fetchDocument();
+  }, [documentId]);
+
+  const fetchDocument = async () => {
+    try {
+      const response = await fetch(`/api/documents/${documentId}`);
+      if (!response.ok) throw new Error("Failed to fetch document");
+      
+      const data = await response.json();
+      setDocument(data);
+      
+      // Set active tab based on document status
+      if (data.status === DocumentStatus.PROCESSING || data.status === DocumentStatus.PENDING) {
+        setActiveTab("status");
+      }
+    } catch (error) {
+      toast.error("Failed to load document");
+      router.push("/documents");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSave = async (data: { title: string; content: any }) => {
+    try {
+      const response = await fetch(`/api/documents/${documentId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) throw new Error("Failed to save document");
+
+      const updatedDoc = await response.json();
+      setDocument(updatedDoc);
+      toast.success("Document saved successfully");
+    } catch (error) {
+      toast.error("Failed to save document");
+      throw error;
+    }
+  };
+
+  const handleExport = async (format: string) => {
+    try {
+      const response = await fetch(`/api/documents/${documentId}/export?format=${format}`);
+      
+      if (!response.ok) throw new Error("Failed to export document");
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${document?.title || "document"}.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      toast.success(`Document exported as ${format.toUpperCase()}`);
+    } catch (error) {
+      toast.error("Failed to export document");
+      throw error;
+    }
+  };
+
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    try {
+      const response = await fetch(`/api/documents/${documentId}`, {
+        method: "DELETE",
+      });
+      
+      if (!response.ok) throw new Error("Failed to delete document");
+      
+      toast.success("Document deleted successfully");
+      router.push("/documents");
+    } catch (error) {
+      toast.error("Failed to delete document");
+    } finally {
+      setIsDeleting(false);
+      setDeleteDialogOpen(false);
+    }
+  };
+
+  const copyToClipboard = async () => {
+    if (!document) return;
+    
+    try {
+      const content = typeof document.content === "string" 
+        ? document.content 
+        : JSON.stringify(document.content, null, 2);
+      
+      await navigator.clipboard.writeText(content);
+      toast.success("Content copied to clipboard");
+    } catch (error) {
+      toast.error("Failed to copy content");
+    }
+  };
+
+  if (isLoading) {
+    return <DocumentDetailSkeleton />;
+  }
+
+  if (!document) {
+    return null;
+  }
+
+  const status = statusConfig[document.status];
+  const StatusIcon = status.icon;
+
+  return (
+    <div className="container max-w-7xl mx-auto py-8 px-4">
+      {/* Header */}
+      <div className="mb-8">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => router.push("/documents")}
+          className="mb-4"
+        >
+          <ChevronLeft className="h-4 w-4 mr-2" />
+          Back to Documents
+        </Button>
+        
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-3xl font-bold mb-2">{document.title}</h1>
+            {document.description && (
+              <p className="text-muted-foreground">{document.description}</p>
+            )}
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={copyToClipboard}>
+              <Copy className="h-4 w-4 mr-2" />
+              Copy
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => handleExport("pdf")}>
+              <Download className="h-4 w-4 mr-2" />
+              Export
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setDeleteDialogOpen(true)}
+              className="text-destructive"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Status Alert */}
+      {document.status !== DocumentStatus.COMPLETED && (
+        <Alert className="mb-6">
+          <StatusIcon className="h-4 w-4" />
+          <AlertDescription>{status.description}</AlertDescription>
+        </Alert>
+      )}
+
+      {/* Main Content */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="grid grid-cols-3 w-full">
+              <TabsTrigger value="content">Content</TabsTrigger>
+              <TabsTrigger value="metadata">Details</TabsTrigger>
+              <TabsTrigger value="status">Status</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="content" className="mt-6">
+              {document.status === DocumentStatus.COMPLETED ? (
+                <DocumentEditor
+                  documentId={document.id}
+                  initialTitle={document.title}
+                  initialContent={document.content}
+                  documentType={document.documentType}
+                  onSave={handleSave}
+                  onExport={handleExport}
+                />
+              ) : (
+                <Card>
+                  <CardContent className="py-12 text-center">
+                    <StatusIcon className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                    <p className="text-muted-foreground">
+                      {document.status === DocumentStatus.PROCESSING
+                        ? "Your document is being generated..."
+                        : "Document content will be available once processing is complete"}
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+            </TabsContent>
+            
+            <TabsContent value="metadata" className="mt-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Document Metadata</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <h4 className="text-sm font-medium mb-2">Input Data</h4>
+                    <pre className="text-xs bg-muted p-4 rounded-lg overflow-auto max-h-96">
+                      {JSON.stringify(document.metadata?.input || {}, null, 2)}
+                    </pre>
+                  </div>
+                  
+                  {document.metadata?.generation && (
+                    <div>
+                      <h4 className="text-sm font-medium mb-2">Generation Details</h4>
+                      <pre className="text-xs bg-muted p-4 rounded-lg overflow-auto">
+                        {JSON.stringify(document.metadata.generation, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+            
+            <TabsContent value="status" className="mt-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Processing Status</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Current Status</span>
+                      <Badge variant={status.variant} className="gap-1">
+                        <StatusIcon className="h-3 w-3" />
+                        {status.label}
+                      </Badge>
+                    </div>
+                    
+                    {document.status === DocumentStatus.PROCESSING && (
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span>Processing document...</span>
+                          <span className="text-muted-foreground">In progress</span>
+                        </div>
+                        <div className="w-full bg-secondary rounded-full h-2">
+                          <div className="bg-primary h-2 rounded-full animate-pulse" style={{ width: "60%" }} />
+                        </div>
+                      </div>
+                    )}
+                    
+                    {document.status === DocumentStatus.FAILED && (
+                      <Alert variant="destructive">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>
+                          Document generation failed. Please try creating a new document.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </div>
+
+        {/* Sidebar */}
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Document Information</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Type</span>
+                <Badge variant="outline" className="capitalize">
+                  {document.documentType.toLowerCase().replace("_", " ")}
+                </Badge>
+              </div>
+              
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Status</span>
+                <Badge variant={status.variant} className="gap-1">
+                  <StatusIcon className="h-3 w-3" />
+                  {status.label}
+                </Badge>
+              </div>
+              
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Created</span>
+                <span title={format(new Date(document.createdAt), "PPpp")}>
+                  {formatDistanceToNow(new Date(document.createdAt), { addSuffix: true })}
+                </span>
+              </div>
+              
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Updated</span>
+                <span title={format(new Date(document.updatedAt), "PPpp")}>
+                  {formatDistanceToNow(new Date(document.updatedAt), { addSuffix: true })}
+                </span>
+              </div>
+              
+              <div className="pt-4 border-t">
+                <p className="text-xs text-muted-foreground mb-2">Document ID</p>
+                <code className="text-xs bg-muted px-2 py-1 rounded">{document.id}</code>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Quick Actions</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <Button variant="outline" className="w-full justify-start" asChild>
+                <Link href={`/documents/${document.id}/edit`}>
+                  <Edit className="h-4 w-4 mr-2" />
+                  Edit Document
+                </Link>
+              </Button>
+              
+              <Button variant="outline" className="w-full justify-start" onClick={() => toast.info("Share feature coming soon!")}>
+                <Share2 className="h-4 w-4 mr-2" />
+                Share Document
+              </Button>
+              
+              <Button variant="outline" className="w-full justify-start" onClick={() => handleExport("docx")}>
+                <Download className="h-4 w-4 mr-2" />
+                Download DOCX
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Document</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{document.title}"? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+function DocumentDetailSkeleton() {
+  return (
+    <div className="container max-w-7xl mx-auto py-8 px-4">
+      <Skeleton className="h-10 w-32 mb-8" />
+      
+      <div className="mb-8">
+        <Skeleton className="h-10 w-3/4 mb-2" />
+        <Skeleton className="h-6 w-1/2" />
+      </div>
+      
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <Skeleton className="h-12 w-full mb-6" />
+          <Card>
+            <CardContent className="py-12">
+              <Skeleton className="h-32 w-full" />
+            </CardContent>
+          </Card>
+        </div>
+        
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-6 w-32" />
+            </CardHeader>
+            <CardContent>
+              <Skeleton className="h-24 w-full" />
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}

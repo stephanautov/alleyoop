@@ -1,568 +1,405 @@
-//src/app/documents/new/page.tsx
+'use client';
 
-"use client";
-
-import { useState, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/components/ui/card";
-import { Button } from "~/components/ui/button";
-import { Badge } from "~/components/ui/badge";
-import { Alert, AlertDescription } from "~/components/ui/alert";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import { FormGenerator } from "~/components/forms/form-generator";
-import { ProviderSelector } from "~/components/llm/provider-selector";
-import { api } from "~/trpc/react";
-import { toast } from "sonner";
+import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@clerk/nextjs';
+import { api } from '~/trpc/react';
+import { DocumentType } from '@prisma/client';
 import {
   FileText,
-  ArrowLeft,
-  Sparkles,
-  Clock,
-  DollarSign,
-  AlertCircle,
-  Settings,
-  User,
-  Scale,
   Briefcase,
-  FileHeart,
-} from "lucide-react";
-import { DocumentType } from "@prisma/client";
-import {
-  getDocumentSchema,
-  getDocumentConfig,
-  estimateTokenUsage,
-  estimateCost,
-  biographySchema,
-  caseSummarySchema,
-  businessPlanSchema,
-  medicalReportSchema,
-  grantProposalSchema,
-} from "~/config/documents";
-import Link from "next/link";
-import type { ProviderName } from "~/server/services/llm";
+  Gavel,
+  Heart,
+  FileCheck,
+  ArrowRight,
+  Loader2,
+  DollarSign,
+  Info
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+
+// Import existing components
+import { FormGenerator } from '~/components/forms/form-generator';
+import { ProviderSelector } from '~/components/llm/provider-selector';
+import { DocumentFormWithRAG } from '~/components/forms/rag-integration';
+import { ProgressModal } from '~/components/progress/progress-modal';
+
+// Document type configuration
+const DOCUMENT_TYPES = [
+  {
+    type: DocumentType.BIOGRAPHY,
+    name: 'Biography',
+    description: 'Create compelling life stories and personal narratives',
+    icon: FileText,
+    color: 'blue',
+    estimatedTime: '5-10 min',
+  },
+  {
+    type: DocumentType.BUSINESS_PLAN,
+    name: 'Business Plan',
+    description: 'Comprehensive business strategies and financial projections',
+    icon: Briefcase,
+    color: 'green',
+    estimatedTime: '10-15 min',
+  },
+  {
+    type: DocumentType.CASE_SUMMARY,
+    name: 'Case Summary',
+    description: 'Legal case analysis and summaries',
+    icon: Gavel,
+    color: 'purple',
+    estimatedTime: '5-10 min',
+  },
+  {
+    type: DocumentType.GRANT_PROPOSAL,
+    name: 'Grant Proposal',
+    description: 'Funding applications and research proposals',
+    icon: Heart,
+    color: 'red',
+    estimatedTime: '10-20 min',
+  },
+  {
+    type: DocumentType.MEDICAL_REPORT,
+    name: 'Medical Report',
+    description: 'Clinical reports and medical documentation',
+    icon: FileCheck,
+    color: 'yellow',
+    estimatedTime: '5-10 min',
+  },
+];
 
 export default function NewDocumentPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const initialType = searchParams.get("type") as DocumentType | null;
+  const { userId } = useAuth();
+  const [step, setStep] = useState(1); // 1: Type, 2: Form, 3: Config, 4: Generating
+  const [selectedType, setSelectedType] = useState<DocumentType | null>(null);
+  const [formData, setFormData] = useState({});
+  const [llmConfig, setLLMConfig] = useState({
+    provider: 'openai',
+    model: 'gpt-4-turbo',
+  });
+  const [ragConfig, setRAGConfig] = useState({
+    ragEnabled: false,
+    knowledgeSourceIds: [],
+    autoSelect: true,
+  });
+  const [documentId, setDocumentId] = useState<string | null>(null);
+  const [showProgress, setShowProgress] = useState(false);
 
-  const [selectedType, setSelectedType] = useState<DocumentType | null>(
-    initialType && Object.values(DocumentType).includes(initialType)
-      ? initialType
-      : null,
-  );
-
-  // Provider selection state
-  const [selectedProvider, setSelectedProvider] = useState<ProviderName | null>(null);
-  const [selectedModel, setSelectedModel] = useState<string | null>(null);
-
-  const { data: availableTypes, isLoading } =
-    api.document.getAvailableTypes.useQuery();
-
-  // User preferences queries
-  const { data: userPreferences } = api.preferences.get.useQuery();
-  const { data: documentPreferences } = api.preferences.getProviderForDocument.useQuery(
-    { documentType: selectedType! },
+  // Get document schema and config
+  const { data: schemaData } = api.document.getSchema.useQuery(
+    { type: selectedType! },
     { enabled: !!selectedType }
   );
-  const { data: costStatus } = api.preferences.checkCostLimit.useQuery();
 
-  // Set default provider/model when preferences load or document type changes
-  useEffect(() => {
-    if (documentPreferences) {
-      setSelectedProvider(documentPreferences.provider);
-      setSelectedModel(documentPreferences.model);
-    } else if (userPreferences) {
-      setSelectedProvider(userPreferences.defaultProvider);
-      setSelectedModel(null);
-    }
-  }, [documentPreferences, userPreferences]);
+  // Check RAG availability
+  const { data: ragStatus } = api.knowledge.checkAvailability.useQuery(
+    undefined,
+    { enabled: step >= 2 }
+  );
 
-  const createDocument = api.document.create.useMutation({
-    onSuccess: (document) => {
-      toast.success("Document created successfully!");
-      router.push(`/documents/${document.id}`);
+  // Create document mutation
+  const createMutation = api.document.create.useMutation({
+    onSuccess: (data) => {
+      setDocumentId(data.id);
+      setShowProgress(true);
+      setStep(4);
     },
     onError: (error) => {
-      toast.error(error.message ?? "Failed to create document");
+      console.error('Document creation error:', error);
     },
   });
 
-  if (isLoading) {
-    return (
-      <div className="container mx-auto py-6">
-        <div className="animate-pulse space-y-4">
-          <div className="bg-muted h-8 w-48 rounded"></div>
-          <div className="bg-muted h-64 rounded"></div>
-        </div>
-      </div>
-    );
-  }
+  // Calculate estimated cost
+  const estimatedCost = React.useMemo(() => {
+    if (!selectedType || !llmConfig.model) return null;
+
+    // Rough estimates based on document type and model
+    const baseCosts = {
+      'gpt-4-turbo': 0.03,
+      'gpt-3.5-turbo': 0.002,
+      'claude-3-opus': 0.045,
+      'claude-3-sonnet': 0.009,
+      'gemini-1.5-pro': 0.01,
+    };
+
+    const typeMultipliers = {
+      [DocumentType.BIOGRAPHY]: 2,
+      [DocumentType.BUSINESS_PLAN]: 3,
+      [DocumentType.CASE_SUMMARY]: 1.5,
+      [DocumentType.GRANT_PROPOSAL]: 2.5,
+      [DocumentType.MEDICAL_REPORT]: 1,
+    };
+
+    const base = baseCosts[llmConfig.model] || 0.01;
+    const multiplier = typeMultipliers[selectedType] || 1;
+    const ragMultiplier = ragConfig.ragEnabled ? 1.2 : 1;
+
+    return (base * multiplier * ragMultiplier).toFixed(3);
+  }, [selectedType, llmConfig.model, ragConfig.ragEnabled]);
 
   const handleTypeSelect = (type: DocumentType) => {
     setSelectedType(type);
-    // Update URL without navigation
-    const url = new URL(window.location.href);
-    url.searchParams.set("type", type);
-    window.history.pushState({}, "", url);
+    setStep(2);
   };
 
-  const handleSubmit = async (data: any) => {
-    if (!selectedType || !selectedProvider) {
-      toast.error("Please select a provider");
-      return;
-    }
+  const handleFormSubmit = (data: any) => {
+    setFormData(data);
+    setStep(3);
+  };
 
-    // Check cost limit
-    if (costStatus && !costStatus.withinLimit) {
-      toast.error(`Monthly cost limit exceeded. Current: $${costStatus.currentCost?.toFixed(2)} / $${costStatus.limit?.toFixed(2)}`);
-      return;
-    }
-
-    await createDocument.mutateAsync({
-      type: selectedType,
-      title: data.title,
-      input: data,
-      provider: selectedProvider,
-      model: selectedModel || undefined,
-      temperature: documentPreferences?.settings?.temperature,
-      maxTokens: documentPreferences?.settings?.maxTokens || undefined,
-      useCache: documentPreferences?.settings?.cacheEnabled,
+  const handleGenerate = () => {
+    createMutation.mutate({
+      type: selectedType!,
+      input: formData,
+      provider: llmConfig.provider,
+      model: llmConfig.model,
+      ragEnabled: ragConfig.ragEnabled,
+      knowledgeSourceIds: ragConfig.knowledgeSourceIds,
+      autoSelectSources: ragConfig.autoSelect,
     });
   };
 
-  const getSchemaForType = (type: DocumentType) => {
-    switch (type) {
-      case DocumentType.BIOGRAPHY:
-        return biographySchema;
-      case DocumentType.CASE_SUMMARY:
-        return caseSummarySchema;
-      case DocumentType.BUSINESS_PLAN:
-        return businessPlanSchema;
-      case DocumentType.MEDICAL_REPORT:
-        return medicalReportSchema;
-      case DocumentType.GRANT_PROPOSAL:
-        return grantProposalSchema;
-      default:
-        return biographySchema;
+  const handleComplete = () => {
+    if (documentId) {
+      router.push(`/documents/${documentId}`);
     }
   };
 
-  // Check if user can generate documents
-  const canGenerate = !costStatus || costStatus.withinLimit;
-
   return (
-    <div className="container mx-auto space-y-6 py-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Link href="/dashboard">
-            <Button variant="ghost" size="sm">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Dashboard
-            </Button>
-          </Link>
-        </div>
-        <Link href="/settings/preferences">
-          <Button variant="ghost" size="sm">
-            <Settings className="mr-2 h-4 w-4" />
-            Preferences
-          </Button>
-        </Link>
-      </div>
-
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">
-          Create New Document
-        </h1>
-        <p className="text-muted-foreground">
-          Choose a document type and provide the necessary information
-        </p>
-      </div>
-
-      {/* Cost limit warning */}
-      {costStatus && !costStatus.withinLimit && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            You've reached your monthly cost limit (${costStatus.limit?.toFixed(2)}).
-            Current usage: ${costStatus.currentCost?.toFixed(2)}.
-            <Link href="/settings/preferences" className="underline ml-1">
-              Update your limit
-            </Link> to continue generating documents.
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {!selectedType ? (
-        // Document Type Selection
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {availableTypes?.map((type) => {
-            const config = getDocumentConfig(type.type);
-            const Icon = getIconComponent(type.icon);
-            return (
-              <Card
-                key={type.type}
-                className="hover:border-primary cursor-pointer transition-all hover:shadow-lg"
-                onClick={() => handleTypeSelect(type.type)}
-              >
-                <CardHeader>
-                  <div className="bg-primary/10 mb-2 flex h-12 w-12 items-center justify-center rounded-lg">
-                    <Icon className="text-primary h-6 w-6" />
-                  </div>
-                  <CardTitle>{type.name}</CardTitle>
-                  <CardDescription>{type.description}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex flex-wrap gap-2">
-                    {type.exportFormats.map((format) => (
-                      <Badge
-                        key={format}
-                        variant="secondary"
-                        className="text-xs"
-                      >
-                        {format.toUpperCase()}
-                      </Badge>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      ) : (
-        // Document Creation Form
-        <div className="grid gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle>
-                      {getDocumentConfig(selectedType).name}
-                    </CardTitle>
-                    <CardDescription>
-                      Fill out the form below to generate your document
-                    </CardDescription>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setSelectedType(null)}
-                  >
-                    Change Type
-                  </Button>
+    <div className="container mx-auto py-8 px-4 max-w-6xl">
+      {/* Progress Steps */}
+      <div className="mb-8">
+        <div className="flex items-center justify-center space-x-4">
+          {[
+            { num: 1, label: 'Choose Type' },
+            { num: 2, label: 'Enter Details' },
+            { num: 3, label: 'Configure AI' },
+            { num: 4, label: 'Generate' },
+          ].map((s, idx) => (
+            <React.Fragment key={s.num}>
+              <div className="flex items-center">
+                <div
+                  className={`w-10 h-10 rounded-full flex items-center justify-center font-medium ${step >= s.num
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-gray-200 text-gray-500'
+                    }`}
+                >
+                  {step > s.num ? '✓' : s.num}
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {/* Provider Selection */}
-                <div className="space-y-2">
-                  <h3 className="text-sm font-medium">AI Provider</h3>
-                  <ProviderSelector
-                    value={{
-                      provider: selectedProvider || userPreferences?.defaultProvider || 'openai',
-                      model: selectedModel || null
-                    }}
-                    onChange={({ provider, model }) => {
-                      setSelectedProvider(provider);
-                      setSelectedModel(model);
-                    }}
-                    documentType={selectedType}
-                    showCosts={true}
-                    showCapabilities={true}
-                  />
-                  {documentPreferences && (
-                    <p className="text-xs text-muted-foreground">
-                      Using your saved preference for {getDocumentConfig(selectedType).name}
+                <span className={`ml-2 ${step >= s.num ? 'text-gray-900' : 'text-gray-500'
+                  }`}>
+                  {s.label}
+                </span>
+              </div>
+              {idx < 3 && (
+                <div className={`flex-1 h-0.5 ${step > s.num ? 'bg-blue-500' : 'bg-gray-200'
+                  }`} />
+              )}
+            </React.Fragment>
+          ))}
+        </div>
+      </div>
+
+      <AnimatePresence mode="wait">
+        {/* Step 1: Document Type Selection */}
+        {step === 1 && (
+          <motion.div
+            key="step1"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+          >
+            <h1 className="text-3xl font-bold text-gray-900 mb-2 text-center">
+              What would you like to create?
+            </h1>
+            <p className="text-gray-600 text-center mb-8">
+              Choose a document type to get started
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {DOCUMENT_TYPES.map((doc) => {
+                const Icon = doc.icon;
+                return (
+                  <motion.button
+                    key={doc.type}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => handleTypeSelect(doc.type)}
+                    className={`p-6 rounded-xl border-2 text-left transition-all hover:shadow-lg ${selectedType === doc.type
+                      ? 'border-blue-500 bg-blue-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                  >
+                    <div className={`inline-flex p-3 rounded-lg bg-${doc.color}-100 text-${doc.color}-600 mb-4`}>
+                      <Icon className="h-6 w-6" />
+                    </div>
+                    <h3 className="font-semibold text-gray-900 mb-1">
+                      {doc.name}
+                    </h3>
+                    <p className="text-sm text-gray-600 mb-3">
+                      {doc.description}
+                    </p>
+                    <div className="flex items-center text-xs text-gray-500">
+                      <span>⏱ {doc.estimatedTime}</span>
+                    </div>
+                  </motion.button>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+
+        {/* Step 2: Document Form */}
+        {step === 2 && selectedType && schemaData && (
+          <motion.div
+            key="step2"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+          >
+            <div className="max-w-3xl mx-auto">
+              <h2 className="text-2xl font-bold text-gray-900 mb-6">
+                Enter Document Details
+              </h2>
+
+              <DocumentFormWithRAG
+                documentType={selectedType}
+                formData={formData}
+                onRAGConfigChange={setRAGConfig}
+              >
+                <FormGenerator
+                  schema={schemaData.schema}
+                  onSubmit={handleFormSubmit}
+                  className="space-y-6"
+                >
+                  <div className="flex justify-between pt-6">
+                    <button
+                      type="button"
+                      onClick={() => setStep(1)}
+                      className="px-6 py-2 text-gray-600 hover:text-gray-900"
+                    >
+                      Back
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 flex items-center space-x-2"
+                    >
+                      <span>Continue</span>
+                      <ArrowRight className="h-4 w-4" />
+                    </button>
+                  </div>
+                </FormGenerator>
+              </DocumentFormWithRAG>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Step 3: AI Configuration */}
+        {step === 3 && (
+          <motion.div
+            key="step3"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="max-w-4xl mx-auto"
+          >
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">
+              Configure AI Settings
+            </h2>
+
+            {/* Provider Selection */}
+            <div className="mb-8">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">
+                Choose AI Provider & Model
+              </h3>
+              <ProviderSelector
+                value={llmConfig}
+                onChange={setLLMConfig}
+                documentType={selectedType!}
+                showCosts={true}
+                showCapabilities={true}
+              />
+            </div>
+
+            {/* Cost Estimate */}
+            <div className="bg-gray-50 rounded-lg p-6 mb-8">
+              <div className="flex items-start space-x-3">
+                <DollarSign className="h-5 w-5 text-green-600 mt-0.5" />
+                <div>
+                  <h4 className="font-medium text-gray-900">Estimated Cost</h4>
+                  <p className="text-2xl font-bold text-green-600 mt-1">
+                    ${estimatedCost}
+                  </p>
+                  <p className="text-sm text-gray-600 mt-1">
+                    This is an estimate. Actual cost may vary based on document length and complexity.
+                  </p>
+                  {ragConfig.ragEnabled && (
+                    <p className="text-sm text-blue-600 mt-2">
+                      +20% for RAG enhancement
                     </p>
                   )}
                 </div>
+              </div>
+            </div>
 
-                {/* Document Form */}
-                <FormGenerator
-                  schema={getSchemaForType(selectedType)}
-                  onSubmit={handleSubmit}
-                  isSubmitting={createDocument.isPending}
-                  submitText="Generate Document"
-                  fieldConfig={getFieldConfig(selectedType)}
-                  disabled={!canGenerate}
-                />
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* AI Model Info */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">AI Generation</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <div className="flex items-center gap-2 text-sm">
-                  <Sparkles className="text-primary h-4 w-4" />
-                  <span>
-                    {selectedProvider && selectedModel
-                      ? `${selectedProvider} - ${selectedModel}`
-                      : 'Select a provider'
-                    }
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <Clock className="text-muted-foreground h-4 w-4" />
-                  <span>~2-5 minutes generation time</span>
-                </div>
-                {documentPreferences?.settings && (
-                  <div className="text-xs text-muted-foreground space-y-1 pt-2 border-t">
-                    <div>Temperature: {documentPreferences.settings.temperature}</div>
-                    {documentPreferences.settings.preferSpeed && (
-                      <div>Speed optimized</div>
-                    )}
-                    {documentPreferences.settings.cacheEnabled && (
-                      <div>Caching enabled</div>
-                    )}
-                  </div>
+            {/* Generation Summary */}
+            <div className="bg-blue-50 rounded-lg p-6 mb-8">
+              <h4 className="font-medium text-blue-900 mb-3">
+                Ready to Generate:
+              </h4>
+              <ul className="space-y-2 text-sm text-blue-800">
+                <li>• Document Type: {DOCUMENT_TYPES.find(d => d.type === selectedType)?.name}</li>
+                <li>• AI Provider: {llmConfig.provider}</li>
+                <li>• Model: {llmConfig.model}</li>
+                <li>• RAG Enhancement: {ragConfig.ragEnabled ? 'Enabled' : 'Disabled'}</li>
+                {ragConfig.ragEnabled && (
+                  <li>• Knowledge Sources: {ragConfig.autoSelect ? 'Auto-select' : `${ragConfig.knowledgeSourceIds.length} selected`}</li>
                 )}
-              </CardContent>
-            </Card>
+              </ul>
+            </div>
 
-            {/* Cost Estimate */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Estimated Cost</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Tabs defaultValue="medium" className="w-full">
-                  <TabsList className="grid w-full grid-cols-3">
-                    <TabsTrigger value="short">Short</TabsTrigger>
-                    <TabsTrigger value="medium">Medium</TabsTrigger>
-                    <TabsTrigger value="long">Long</TabsTrigger>
-                  </TabsList>
-                  {["short", "medium", "long"].map((length) => {
-                    const tokens = estimateTokenUsage(
-                      selectedType,
-                      length as "short" | "medium" | "long",
-                    );
-                    const cost = estimateCost(tokens);
-                    return (
-                      <TabsContent
-                        key={length}
-                        value={length}
-                        className="space-y-2"
-                      >
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Tokens:</span>
-                          <span>{tokens.toLocaleString()}</span>
-                        </div>
-                        <div className="flex justify-between text-sm font-medium">
-                          <span className="text-muted-foreground">Cost:</span>
-                          <span className="flex items-center gap-1">
-                            <DollarSign className="h-3 w-3" />
-                            {cost.toFixed(2)}
-                          </span>
-                        </div>
-                      </TabsContent>
-                    );
-                  })}
-                </Tabs>
-                {costStatus && costStatus.percentage > 80 && (
-                  <Alert className="mt-3">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription className="text-xs">
-                      You've used {costStatus.percentage}% of your monthly limit
-                    </AlertDescription>
-                  </Alert>
+            {/* Action Buttons */}
+            <div className="flex justify-between">
+              <button
+                onClick={() => setStep(2)}
+                className="px-6 py-2 text-gray-600 hover:text-gray-900"
+              >
+                Back
+              </button>
+              <button
+                onClick={handleGenerate}
+                disabled={createMutation.isLoading}
+                className="px-8 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 text-lg font-medium"
+              >
+                {createMutation.isLoading ? (
+                  <>
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    <span>Preparing...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Generate Document</span>
+                    <ArrowRight className="h-5 w-5" />
+                  </>
                 )}
-              </CardContent>
-            </Card>
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-            {/* Tips */}
-            <Alert>
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                <strong>Tips for better results:</strong>
-                <ul className="mt-2 space-y-1 text-sm">
-                  <li>• Provide specific, detailed information</li>
-                  <li>• Choose the appropriate output length</li>
-                  <li>• Review and edit the generated content</li>
-                  <li>• Select the best AI model for your needs</li>
-                </ul>
-              </AlertDescription>
-            </Alert>
-          </div>
-        </div>
+      {/* Progress Modal */}
+      {showProgress && documentId && (
+        <ProgressModal
+          documentId={documentId}
+          onComplete={handleComplete}
+          onError={(error) => {
+            console.error('Generation error:', error);
+            setShowProgress(false);
+          }}
+        />
       )}
     </div>
   );
-}
-
-// Field configurations for different document types
-function getFieldConfig(type: DocumentType) {
-  const commonConfig = {
-    title: {
-      placeholder: "Enter a descriptive title for your document",
-      description: "This will be the main title of your generated document",
-    },
-    outputLength: {
-      label: "Document Length",
-      description: "Choose how detailed you want the document to be",
-    },
-  };
-
-  const typeSpecificConfig: Record<DocumentType, any> = {
-    [DocumentType.BIOGRAPHY]: {
-      ...commonConfig,
-      subject: {
-        label: "Subject Information",
-        description: "Details about the person this biography is about",
-      },
-      purpose: {
-        label: "Biography Purpose",
-        description: "What is the intended use of this biography?",
-      },
-      tone: {
-        label: "Writing Tone",
-        description: "The style and tone for the biography",
-      },
-      focusAreas: {
-        label: "Areas to Focus On",
-        description: "Select the sections you want to include",
-        multiple: true,
-      },
-      additionalInfo: {
-        label: "Additional Information",
-        placeholder:
-          "Any specific details, achievements, or context you want included",
-        type: "textarea",
-        rows: 4,
-      },
-    },
-    [DocumentType.CASE_SUMMARY]: {
-      ...commonConfig,
-      caseInfo: {
-        label: "Case Information",
-        description: "Basic information about the legal case",
-      },
-      parties: {
-        label: "Parties Involved",
-        description: "The plaintiff and defendant in the case",
-      },
-      legalIssues: {
-        label: "Legal Issues",
-        description: "The main legal questions addressed in the case",
-        placeholder: "Add a legal issue and press Enter",
-      },
-      facts: {
-        label: "Case Facts (Optional)",
-        placeholder: "Provide any specific facts about the case",
-        type: "textarea",
-        rows: 4,
-      },
-      includeAnalysis: {
-        label: "Include Legal Analysis",
-        description: "Add analysis of the legal reasoning and implications",
-      },
-    },
-    [DocumentType.BUSINESS_PLAN]: {
-      ...commonConfig,
-      business: {
-        label: "Business Information",
-        description: "Basic details about your business",
-      },
-      sections: {
-        label: "Sections to Include",
-        description: "Choose which sections to include in your business plan",
-        multiple: true,
-      },
-      targetAudience: {
-        label: "Target Audience",
-        description: "Who will be reading this business plan?",
-      },
-      fundingAmount: {
-        label: "Funding Amount (Optional)",
-        placeholder: "e.g., $500,000",
-        description: "If seeking funding, specify the amount",
-      },
-      financialYears: {
-        label: "Financial Projection Years",
-        description: "Number of years for financial projections",
-      },
-    },
-    [DocumentType.MEDICAL_REPORT]: {
-      ...commonConfig,
-      patient: {
-        label: "Patient Information",
-        description: "Use identifiers only, no real patient names",
-      },
-      reportType: {
-        label: "Report Type",
-        description: "The type of medical report to generate",
-      },
-      clinicalInfo: {
-        label: "Clinical Information",
-        description: "Key medical details for the report",
-      },
-      findings: {
-        label: "Clinical Findings (Optional)",
-        placeholder: "Describe examination findings, test results, etc.",
-        type: "textarea",
-        rows: 4,
-      },
-      recommendations: {
-        label: "Recommendations (Optional)",
-        placeholder: "Treatment recommendations or follow-up plans",
-        type: "textarea",
-        rows: 3,
-      },
-      includeDisclaimer: {
-        label: "Include Medical Disclaimer",
-        description: "Add a disclaimer that this is AI-generated content",
-      },
-    },
-    [DocumentType.GRANT_PROPOSAL]: {
-      ...commonConfig,
-      organization: {
-        label: "Organization Information",
-        description: "Details about the organization applying for the grant",
-      },
-      grant: {
-        label: "Grant Information",
-        description: "Details about the grant opportunity",
-      },
-      project: {
-        label: "Project Information",
-        description: "Information about the proposed project",
-      },
-      sections: {
-        label: "Sections to Include",
-        description: "Choose which sections to include in your proposal",
-        multiple: true,
-      },
-      focusArea: {
-        label: "Project Focus Area",
-        placeholder: "e.g., Education, Healthcare, Environment",
-        description: "The main area or field of your project",
-      },
-    },
-  };
-
-  return typeSpecificConfig[type] || commonConfig;
-}
-
-// Helper function to get icon component
-function getIconComponent(iconName: string) {
-  const icons: Record<string, any> = {
-    User: User,
-    Scale: Scale,
-    Briefcase: Briefcase,
-    FileHeart: FileHeart,
-    FileText: FileText,
-  };
-  return icons[iconName] || FileText;
 }
