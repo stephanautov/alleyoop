@@ -1,6 +1,7 @@
 //src/app/page.tsx
 
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { getServerAuthSession } from "~/server/auth-compat";
 import { Button } from "~/components/ui/button";
 import {
@@ -27,6 +28,12 @@ import { getEnabledDocumentTypes, getDocumentConfig } from "~/config/documents";
 
 export default async function HomePage() {
   const session = await getServerAuthSession();
+
+  // Redirect authenticated users straight to their dashboard
+  if (session) {
+    redirect("/dashboard");
+  }
+
   const enabledTypes = getEnabledDocumentTypes();
 
   return (
@@ -34,10 +41,37 @@ export default async function HomePage() {
       {/* Navigation */}
       <nav className="bg-background/95 supports-[backdrop-filter]:bg-background/60 border-b backdrop-blur">
         <div className="container flex h-16 items-center justify-between">
-          <div className="flex items-center gap-2">
-            <FileText className="text-primary h-6 w-6" />
-            <span className="text-xl font-bold">DocuForge</span>
+          {/* Brand + in-page nav links */}
+          <div className="flex items-center gap-8">
+            <div className="flex items-center gap-2">
+              <FileText className="text-primary h-6 w-6" />
+              <span className="text-xl font-bold">DocuForge</span>
+            </div>
+
+            {/* In-page anchors (hidden on small screens) */}
+            <div className="hidden md:flex items-center gap-6">
+              <Link
+                href="#features"
+                className="text-sm font-medium transition-colors hover:text-primary"
+              >
+                Features
+              </Link>
+              <Link
+                href="#documents"
+                className="text-sm font-medium transition-colors hover:text-primary"
+              >
+                Documents
+              </Link>
+              <Link
+                href="#testimonials"
+                className="text-sm font-medium transition-colors hover:text-primary"
+              >
+                Testimonials
+              </Link>
+            </div>
           </div>
+
+          {/* Auth / call-to-action buttons */}
           <div className="flex items-center gap-4">
             {session ? (
               <>
@@ -104,7 +138,7 @@ export default async function HomePage() {
       </section>
 
       {/* Document Types */}
-      <section className="border-t py-16">
+      <section id="documents" className="border-t py-16">
         <div className="container">
           <div className="mb-12 text-center">
             <h2 className="mb-4 text-3xl font-bold">Document Types</h2>
@@ -116,7 +150,12 @@ export default async function HomePage() {
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {enabledTypes.map((type) => {
               const config = getDocumentConfig(type);
+
+              // If the document type is not yet configured, skip rendering it
+              if (!config) return null;
+
               const Icon = getIconComponent(config.icon);
+
               return (
                 <Card key={type} className="transition-all hover:shadow-lg">
                   <CardHeader>
@@ -272,7 +311,7 @@ export default async function HomePage() {
       </section>
 
       {/* Stats */}
-      <section className="border-t py-16">
+      <section id="testimonials" className="border-t py-16">
         <div className="container">
           <div className="grid gap-8 text-center sm:grid-cols-3">
             <div>
