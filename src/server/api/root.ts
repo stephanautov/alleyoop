@@ -10,6 +10,7 @@ import { healthRouter } from "./routers/health";
 import { postRouter } from "./routers/post";
 import { enhancedGeneratorsRouter as generatorsRouter } from "./routers/generators-enhanced";
 import { preferencesRouter } from "./routers/preferences";
+import { knowledgeRouter } from "./routers/knowledge";
 
 /**
  * This is the primary router for your server.
@@ -26,6 +27,7 @@ export const appRouter = createTRPCRouter({
   post: postRouter,
   generators: generatorsRouter,
   preferences: preferencesRouter,
+  knowledge: knowledgeRouter,
 });
 
 // export type definition of API

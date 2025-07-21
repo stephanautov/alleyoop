@@ -2,9 +2,16 @@
 // ============================================
 
 import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
-import * as pdfParse from "pdf-parse";
-import * as mammoth from "mammoth";
+// Dynamic imports will be used for heavy parsers to avoid issues during bundling.
+type PdfParseFn = (buffer: Buffer) => Promise<{ text: string; numpages?: number }>;
+type MammothModule = typeof import("mammoth");
 import { decode } from "html-entities";
+
+export interface TextChunk {
+    content: string;
+    index: number;
+    metadata: Record<string, any>;
+}
 
 export interface ProcessedDocument {
     content: string;
@@ -56,14 +63,16 @@ export class DocumentProcessor {
         // Extract text based on file type
         switch (mimeType) {
             case "application/pdf":
-                const pdfData = await pdfParse(buffer);
+                const { default: parsePdf } = await import("pdf-parse") as { default: PdfParseFn };
+                const pdfData = await parsePdf(buffer);
                 content = pdfData.text;
                 metadata.pageCount = pdfData.numpages;
                 break;
 
             case "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
             case "application/msword":
-                const docResult = await mammoth.extractRawText({ buffer });
+                const mammothModule = await import("mammoth") as unknown as MammothModule;
+                const docResult = await mammothModule.extractRawText({ buffer });
                 content = docResult.value;
                 break;
 

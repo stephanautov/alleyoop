@@ -27,11 +27,12 @@ import {
     EyeOff
 } from "lucide-react";
 import { api } from "~/trpc/react";
-import { KnowledgeManagement } from "~/app/knowledge/page";
+import { KnowledgeManagement } from "~/components/knowledge/knowledge-management";
 import { FormGenerator } from "~/components/forms/form-generator";
 import { cn } from "~/lib/utils";
 import { DocumentType } from "@prisma/client";
 
+// Interfaces for RAG configuration and preview
 interface RAGIntegrationProps {
     documentType: DocumentType;
     formData: any;
@@ -60,6 +61,8 @@ interface ContextPreview {
     }>;
 }
 
+// Interfaces for RAG configuration and preview
+
 export function DocumentFormWithRAG({
     documentType,
     formData,
@@ -87,16 +90,58 @@ export function DocumentFormWithRAG({
         limit: 50,
     });
 
-    // Preview mutation
-    const previewMutation = api.knowledge.preview.useMutation({
-        onSuccess: (data) => {
-            setContextPreviews(data.previews);
-            setIsLoadingPreview(false);
-        },
-        onError: () => {
+    // Search parameters state
+    const [shouldSearch, setShouldSearch] = useState(false);
+    const [searchParams, setSearchParams] = useState({
+        query: '',
+        sourceIds: undefined as string[] | undefined,
+        limit: 3
+    });
+
+    // Use search query
+    const searchQuery = api.knowledge.search.useQuery(searchParams, {
+        enabled: shouldSearch && searchParams.query.length > 0,
+    });
+
+    // Reset search state when query completes
+    useEffect(() => {
+        if (shouldSearch && !searchQuery.isLoading) {
+            setShouldSearch(false);
             setIsLoadingPreview(false);
         }
-    });
+    }, [shouldSearch, searchQuery.isLoading]);
+
+    // Handle search results
+    useEffect(() => {
+        if (searchQuery.data && !searchQuery.isLoading) {
+            const data = searchQuery.data as any;
+            // Handle both possible response formats
+            const results = data.results || data.sources || [];
+
+            // Transform results to preview format
+            const groupedBySource = results.reduce((acc: Record<string, ContextPreview>, result: any) => {
+                // Handle different data structures
+                const sourceId = result.source?.id || result.sourceId || result.id || 'unknown';
+                const sourceName = result.source?.name || result.sourceName || result.name || 'Unknown Source';
+
+                if (!acc[sourceId]) {
+                    acc[sourceId] = {
+                        sourceId,
+                        sourceName,
+                        relevantChunks: []
+                    };
+                }
+                acc[sourceId].relevantChunks.push({
+                    content: result.content || '',
+                    similarity: result.similarity || 0,
+                    metadata: result.metadata || {}
+                });
+                return acc;
+            }, {});
+
+            setContextPreviews(Object.values(groupedBySource));
+        }
+    }, [searchQuery.data, searchQuery.isLoading]);
 
     // Update parent when config changes
     useEffect(() => {
@@ -125,16 +170,60 @@ export function DocumentFormWithRAG({
         setRAGConfig(prev => ({ ...prev, knowledgeSourceIds: sourceIds }));
     };
 
-    const handlePreview = async () => {
+    const handlePreview = () => {
         if (!formData || Object.keys(formData).length === 0) return;
 
-        setIsLoadingPreview(true);
-        await previewMutation.mutateAsync({
-            documentType,
-            formData,
-            sourceIds: ragConfig.autoSelect ? undefined : ragConfig.knowledgeSourceIds,
-            maxSources: ragConfig.maxSources
-        });
+        // Build more intelligent queries based on form data
+        const queryParts: string[] = [];
+
+        switch (documentType) {
+            case DocumentType.BIOGRAPHY:
+                if (formData.subjectName) queryParts.push(formData.subjectName);
+                if (formData.occupation) queryParts.push(formData.occupation);
+                if (formData.keyAchievements) queryParts.push(formData.keyAchievements);
+                break;
+            case DocumentType.BUSINESS_PLAN:
+                if (formData.businessName) queryParts.push(formData.businessName);
+                if (formData.industry) queryParts.push(formData.industry);
+                if (formData.targetMarket) queryParts.push(formData.targetMarket);
+                break;
+            case DocumentType.GRANT_PROPOSAL:
+                if (formData.projectTitle) queryParts.push(formData.projectTitle);
+                if (formData.focusArea) queryParts.push(formData.focusArea);
+                if (formData.organization) queryParts.push(formData.organization);
+                break;
+            case DocumentType.CASE_SUMMARY:
+                if (formData.caseTitle) queryParts.push(formData.caseTitle);
+                if (formData.legalIssues) queryParts.push(formData.legalIssues);
+                if (formData.parties) queryParts.push(formData.parties);
+                break;
+            case DocumentType.MEDICAL_REPORT:
+                if (formData.patientCondition) queryParts.push(formData.patientCondition);
+                if (formData.diagnosis) queryParts.push(formData.diagnosis);
+                if (formData.symptoms) queryParts.push(formData.symptoms);
+                break;
+            default:
+                // Fallback: use any string values from formData
+                Object.values(formData).forEach(value => {
+                    if (typeof value === 'string' && value.trim()) {
+                        queryParts.push(value);
+                    }
+                });
+        }
+
+        const query = queryParts.filter(Boolean).join(' ').trim();
+
+        if (query) {
+            setIsLoadingPreview(true);
+            // Update search parameters
+            setSearchParams({
+                query,
+                sourceIds: ragConfig.autoSelect ? undefined : ragConfig.knowledgeSourceIds,
+                limit: 3,
+            });
+            // Trigger the search
+            setShouldSearch(true);
+        }
     };
 
     const availableSourceCount = sources?.sources.filter(s => s.status === 'COMPLETED').length || 0;
@@ -153,7 +242,7 @@ export function DocumentFormWithRAG({
                     <FormGenerator
                         schema={schema}
                         onSubmit={onFormDataChange}
-                        defaultValues={formData}
+                        defaultValues={Object.keys(formData).length ? formData : (() => { try { return schema.parse({}); } catch { return {}; } })()}
                         fieldConfig={fieldConfig}
                     />
                 </CardContent>
@@ -278,12 +367,12 @@ export function DocumentFormWithRAG({
 
                                     {showPreview && (
                                         <div className="border rounded-lg p-4 bg-muted/50">
-                                            {isLoadingPreview ? (
+                                            {isLoadingPreview || searchQuery.isLoading ? (
                                                 <div className="flex items-center justify-center py-8">
                                                     <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                                                 </div>
                                             ) : contextPreviews.length > 0 ? (
-                                                <Tabs defaultValue={contextPreviews[0].sourceId} className="w-full">
+                                                <Tabs defaultValue={contextPreviews[0]?.sourceId || ''} className="w-full">
                                                     <TabsList className="grid w-full" style={{ gridTemplateColumns: `repeat(${contextPreviews.length}, 1fr)` }}>
                                                         {contextPreviews.map((preview) => (
                                                             <TabsTrigger key={preview.sourceId} value={preview.sourceId} className="text-xs">

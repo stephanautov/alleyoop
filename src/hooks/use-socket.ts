@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import { useEffect, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
@@ -22,6 +22,9 @@ export function useSocket() {
             if (socketInstance?.connected) {
                 return socketInstance;
             }
+
+            // ensure serverless route is initialised
+            fetch('/api/socket').catch(() => { /* ignore */ });
 
             socketInstance = io({
                 path: '/api/socket',

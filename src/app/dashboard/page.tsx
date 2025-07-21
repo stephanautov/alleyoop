@@ -1,6 +1,9 @@
-"use-client";
+"use client";
 
 import React from 'react';
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { Skeleton } from "~/components/ui/skeleton";
 import Link from 'next/link';
 import { api } from '~/trpc/react';
 import {
@@ -17,6 +20,8 @@ import {
   BarChart3
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { WelcomeEmptyState } from "~/components/ui/empty-states";
+
 // Date formatting helper
 const formatTimeAgo = (date: Date) => {
   const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
@@ -57,53 +62,62 @@ const statusColors = {
 };
 
 export default function DashboardPage() {
+  // Auth/session handling
+  const { data: session, status: sessionStatus } = useSession();
+  const router = useRouter();
+
+  React.useEffect(() => {
+    if (sessionStatus === "loading") return;
+    if (!session) {
+      router.push("/sign-in");
+    }
+  }, [sessionStatus, session, router]);
+
   // Fetch user stats
-  const { data: stats } = api.document.getUserStats.useQuery();
+  const { data: stats } = api.document.getStats.useQuery(undefined, {
+    enabled: sessionStatus === "authenticated",
+  });
 
   // Fetch recent documents
   const { data: recentDocs } = api.document.list.useQuery({
-    limit: 5,
-    orderBy: 'createdAt',
-    order: 'desc',
+    pagination: { limit: 5 },
+    orderBy: { field: 'createdAt', direction: 'desc' },
+  }, {
+    enabled: sessionStatus === "authenticated",
   });
 
-  // Fetch knowledge base stats
-  const { data: knowledgeStats } = api.knowledge.getStats.useQuery();
+  const statsLoading = !stats;
+  const recentLoading = !recentDocs;
+
+  const isNewUser = !statsLoading && (stats?.total ?? 0) === 0;
+
+  if (isNewUser) {
+    return (
+      <div className="container mx-auto py-12 px-4">
+        <WelcomeEmptyState userName={session?.user?.name ?? undefined} />
+      </div>
+    );
+  }
 
   // Quick stats cards
   const statCards = [
     {
       label: 'Total Documents',
-      value: stats?.totalDocuments || 0,
-      change: stats?.documentsThisMonth || 0,
-      changeLabel: 'this month',
+      value: stats?.total || 0,
+      change: stats?.byStatus?.COMPLETED || 0,
+      changeLabel: 'completed',
       icon: FileText,
       color: 'blue',
     },
     {
       label: 'Total Cost',
       value: `$${(stats?.totalCost || 0).toFixed(2)}`,
-      change: `$${(stats?.costThisMonth || 0).toFixed(2)}`,
-      changeLabel: 'this month',
+      change: '',
+      changeLabel: '',
       icon: DollarSign,
       color: 'green',
     },
-    {
-      label: 'Knowledge Sources',
-      value: knowledgeStats?.totalSources || 0,
-      change: knowledgeStats?.totalEmbeddings || 0,
-      changeLabel: 'embeddings',
-      icon: BookOpen,
-      color: 'purple',
-    },
-    {
-      label: 'Time Saved',
-      value: `${stats?.timeSavedHours || 0}h`,
-      change: stats?.avgGenerationTime || 0,
-      changeLabel: 'avg generation',
-      icon: Clock,
-      color: 'orange',
-    },
+    // Additional stats can be added here as needed
   ];
 
   return (
@@ -203,18 +217,24 @@ export default function DashboardPage() {
                 </div>
                 <TrendingUp className="h-4 w-4 text-green-500" />
               </div>
-              <h3 className="text-2xl font-bold text-gray-900">
-                {stat.value}
-              </h3>
+              {statsLoading ? (
+                <Skeleton className="h-7 w-16" />
+              ) : (
+                <h3 className="text-2xl font-bold text-gray-900">
+                  {stat.value}
+                </h3>
+              )}
               <p className="text-sm text-gray-600 mt-1">
                 {stat.label}
               </p>
-              <p className="text-xs text-gray-500 mt-2">
-                <span className="font-medium text-gray-700">
-                  {stat.change}
-                </span>{' '}
-                {stat.changeLabel}
-              </p>
+              {!statsLoading && (
+                <p className="text-xs text-gray-500 mt-2">
+                  <span className="font-medium text-gray-700">
+                    {stat.change}
+                  </span>{' '}
+                  {stat.changeLabel}
+                </p>
+              )}
             </motion.div>
           );
         })}
@@ -237,10 +257,22 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {recentDocs && recentDocs.documents.length > 0 ? (
+        {recentLoading ? (
           <div className="divide-y">
-            {recentDocs.documents.map((doc) => {
-              const Icon = typeIcons[doc.type];
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="p-6 flex items-start space-x-4">
+                <Skeleton className="h-10 w-10 rounded-lg" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-4 w-40" />
+                  <Skeleton className="h-3 w-32" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : recentDocs && recentDocs.items.length > 0 ? (
+          <div className="divide-y">
+            {recentDocs.items.map((doc: any) => {
+              const Icon = typeIcons[doc.type as keyof typeof typeIcons] || FileText;
               return (
                 <div
                   key={doc.id}
@@ -272,7 +304,7 @@ export default function DashboardPage() {
                           )}
                         </div>
                         <div className="mt-2">
-                          <span className={`inline-flex px-2 py-1 text-xs rounded-full ${statusColors[doc.status]
+                          <span className={`inline-flex px-2 py-1 text-xs rounded-full ${statusColors[doc.status as keyof typeof statusColors]
                             }`}>
                             {doc.status}
                           </span>

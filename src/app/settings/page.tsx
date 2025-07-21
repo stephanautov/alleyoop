@@ -2,7 +2,7 @@
 "use client";
 
 import { useState } from "react";
-import { useAuth, useUser } from "@clerk/nextjs";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
@@ -47,6 +47,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
+import { LoadingState } from "~/components/ui/empty-states";
 
 interface UserPreferences {
     emailNotifications: boolean;
@@ -61,8 +62,7 @@ interface UserPreferences {
 }
 
 export default function SettingsPage() {
-    const { userId } = useAuth();
-    const { user } = useUser();
+    const { data: session, status: sessionStatus } = useSession();
     const router = useRouter();
     const [isLoading, setIsLoading] = useState(false);
     const [activeTab, setActiveTab] = useState("profile");
@@ -83,10 +83,16 @@ export default function SettingsPage() {
         language: "en",
     });
 
-    if (!userId) {
+    if (sessionStatus === "loading") {
+        return <LoadingState message="Checking authentication..." />;
+    }
+
+    if (!session) {
         router.push("/sign-in");
         return null;
     }
+
+    const user = session.user;
 
     const handleSavePreferences = async () => {
         setIsLoading(true);
@@ -174,11 +180,11 @@ export default function SettingsPage() {
                             <div className="grid gap-4 md:grid-cols-2">
                                 <div className="space-y-2">
                                     <Label htmlFor="firstName">First Name</Label>
-                                    <Input id="firstName" defaultValue={user?.firstName || ""} />
+                                    <Input id="firstName" defaultValue={user?.name?.split(" ")[0] || ""} />
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="lastName">Last Name</Label>
-                                    <Input id="lastName" defaultValue={user?.lastName || ""} />
+                                    <Input id="lastName" defaultValue={user?.name?.split(" ").slice(1).join(" ") || ""} />
                                 </div>
                             </div>
 
@@ -187,7 +193,7 @@ export default function SettingsPage() {
                                 <Input
                                     id="email"
                                     type="email"
-                                    defaultValue={user?.primaryEmailAddress?.emailAddress || ""}
+                                    defaultValue={user?.email || ""}
                                     disabled
                                 />
                                 <p className="text-xs text-muted-foreground">

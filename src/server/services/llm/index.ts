@@ -10,7 +10,9 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { EventEmitter } from "events";
 import { env } from "~/env";
-import { db } from "~/server/db";
+// NOTE: Do **NOT** import the Prisma client in environments where it isn't
+// available (e.g. the browser). It will be dynamically required only when
+// running on the server.
 
 export type ProviderName =
   | "openai"
@@ -560,12 +562,13 @@ export class LLMService {
     cost: number;
     duration: number;
   }) {
+    if (typeof window !== "undefined") return; // Skip on the client
+
     try {
-      await db.lLMCall.create({
-        data,
-      });
-    } catch (error) {
-      console.error("Failed to track LLM call:", error);
+      const { db } = await import("~/server/db");
+      await db.lLMCall.create({ data });
+    } catch (err) {
+      console.error("Failed to record LLM call", err);
     }
   }
 

@@ -1,9 +1,11 @@
-'use client';
+"use client";
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@clerk/nextjs';
+import { useSession } from "next-auth/react";
 import { api } from '~/trpc/react';
+import { getDocumentSchema, getDocumentConfig } from "~/config/documents";
+import type { ProviderName } from "~/server/services/llm";
 import { DocumentType } from '@prisma/client';
 import {
   FileText,
@@ -70,36 +72,39 @@ const DOCUMENT_TYPES = [
 
 export default function NewDocumentPage() {
   const router = useRouter();
-  const { userId } = useAuth();
+  const { data: session, status: sessionStatus } = useSession();
+  // Redirect unauthenticated users
+  React.useEffect(() => {
+    if (sessionStatus === "loading") return;
+    if (!session) {
+      router.push("/sign-in");
+    }
+  }, [sessionStatus, session, router]);
   const [step, setStep] = useState(1); // 1: Type, 2: Form, 3: Config, 4: Generating
   const [selectedType, setSelectedType] = useState<DocumentType | null>(null);
   const [formData, setFormData] = useState({});
-  const [llmConfig, setLLMConfig] = useState({
+  const [llmConfig, setLLMConfig] = useState<{ provider: ProviderName; model: string }>({
     provider: 'openai',
     model: 'gpt-4-turbo',
   });
-  const [ragConfig, setRAGConfig] = useState({
+  const [ragConfigState, setRAGConfigState] = useState({
     ragEnabled: false,
-    knowledgeSourceIds: [],
+    knowledgeSourceIds: [] as string[],
     autoSelect: true,
   });
   const [documentId, setDocumentId] = useState<string | null>(null);
   const [showProgress, setShowProgress] = useState(false);
 
-  // Get document schema and config
-  const { data: schemaData } = api.document.getSchema.useQuery(
-    { type: selectedType! },
-    { enabled: !!selectedType }
-  );
+  const schemaData = React.useMemo(() => {
+    if (!selectedType) return null;
+    const cfg = getDocumentConfig(selectedType);
+    return { schema: cfg?.schema, fieldConfig: (cfg as any)?.fieldConfig };
+  }, [selectedType]);
 
-  // Check RAG availability
-  const { data: ragStatus } = api.knowledge.checkAvailability.useQuery(
-    undefined,
-    { enabled: step >= 2 }
-  );
+  // RAG availability derived
+  const { data: knowledgeSources } = api.knowledge.list.useQuery({ limit: 1 }, { enabled: step >= 2 });
 
-  // Create document mutation
-  const createMutation = api.document.create.useMutation({
+  const createDocumentMutation = api.document.create.useMutation({
     onSuccess: (data) => {
       setDocumentId(data.id);
       setShowProgress(true);
@@ -110,12 +115,15 @@ export default function NewDocumentPage() {
     },
   });
 
+  const createDocument = createDocumentMutation.mutate;
+  const isCreating = (createDocumentMutation as any).isPending ?? (createDocumentMutation as any).isLoading ?? false;
+
   // Calculate estimated cost
   const estimatedCost = React.useMemo(() => {
     if (!selectedType || !llmConfig.model) return null;
 
     // Rough estimates based on document type and model
-    const baseCosts = {
+    const baseCosts: Record<string, number> = {
       'gpt-4-turbo': 0.03,
       'gpt-3.5-turbo': 0.002,
       'claude-3-opus': 0.045,
@@ -131,12 +139,12 @@ export default function NewDocumentPage() {
       [DocumentType.MEDICAL_REPORT]: 1,
     };
 
-    const base = baseCosts[llmConfig.model] || 0.01;
+    const base = baseCosts[llmConfig.model as string] || 0.01;
     const multiplier = typeMultipliers[selectedType] || 1;
-    const ragMultiplier = ragConfig.ragEnabled ? 1.2 : 1;
+    const ragMultiplier = ragConfigState.ragEnabled ? 1.2 : 1;
 
     return (base * multiplier * ragMultiplier).toFixed(3);
-  }, [selectedType, llmConfig.model, ragConfig.ragEnabled]);
+  }, [selectedType, llmConfig.model, ragConfigState.ragEnabled]);
 
   const handleTypeSelect = (type: DocumentType) => {
     setSelectedType(type);
@@ -148,15 +156,22 @@ export default function NewDocumentPage() {
     setStep(3);
   };
 
+  const handleRAGConfigChange = (config: any) => {
+    setRAGConfigState(config);
+  };
+
   const handleGenerate = () => {
-    createMutation.mutate({
+    createDocument({
       type: selectedType!,
-      input: formData,
+      input: {
+        ...formData,
+        title: ((formData as any).title || '').trim() || 'Untitled Document',
+      },
       provider: llmConfig.provider,
       model: llmConfig.model,
-      ragEnabled: ragConfig.ragEnabled,
-      knowledgeSourceIds: ragConfig.knowledgeSourceIds,
-      autoSelectSources: ragConfig.autoSelect,
+      ragEnabled: ragConfigState.ragEnabled,
+      knowledgeSourceIds: ragConfigState.knowledgeSourceIds,
+      autoSelectSources: ragConfigState.autoSelect,
     });
   };
 
@@ -266,31 +281,11 @@ export default function NewDocumentPage() {
               <DocumentFormWithRAG
                 documentType={selectedType}
                 formData={formData}
-                onRAGConfigChange={setRAGConfig}
-              >
-                <FormGenerator
-                  schema={schemaData.schema}
-                  onSubmit={handleFormSubmit}
-                  className="space-y-6"
-                >
-                  <div className="flex justify-between pt-6">
-                    <button
-                      type="button"
-                      onClick={() => setStep(1)}
-                      className="px-6 py-2 text-gray-600 hover:text-gray-900"
-                    >
-                      Back
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 flex items-center space-x-2"
-                    >
-                      <span>Continue</span>
-                      <ArrowRight className="h-4 w-4" />
-                    </button>
-                  </div>
-                </FormGenerator>
-              </DocumentFormWithRAG>
+                onFormDataChange={handleFormSubmit}
+                onRAGConfigChange={handleRAGConfigChange}
+                schema={schemaData.schema}
+                fieldConfig={schemaData.fieldConfig}
+              />
             </div>
           </motion.div>
         )}
@@ -334,7 +329,7 @@ export default function NewDocumentPage() {
                   <p className="text-sm text-gray-600 mt-1">
                     This is an estimate. Actual cost may vary based on document length and complexity.
                   </p>
-                  {ragConfig.ragEnabled && (
+                  {ragConfigState.ragEnabled && (
                     <p className="text-sm text-blue-600 mt-2">
                       +20% for RAG enhancement
                     </p>
@@ -352,9 +347,9 @@ export default function NewDocumentPage() {
                 <li>• Document Type: {DOCUMENT_TYPES.find(d => d.type === selectedType)?.name}</li>
                 <li>• AI Provider: {llmConfig.provider}</li>
                 <li>• Model: {llmConfig.model}</li>
-                <li>• RAG Enhancement: {ragConfig.ragEnabled ? 'Enabled' : 'Disabled'}</li>
-                {ragConfig.ragEnabled && (
-                  <li>• Knowledge Sources: {ragConfig.autoSelect ? 'Auto-select' : `${ragConfig.knowledgeSourceIds.length} selected`}</li>
+                <li>• RAG Enhancement: {ragConfigState.ragEnabled ? 'Enabled' : 'Disabled'}</li>
+                {ragConfigState.ragEnabled && (
+                  <li>• Knowledge Sources: {ragConfigState.autoSelect ? 'Auto-select' : `${ragConfigState.knowledgeSourceIds.length} selected`}</li>
                 )}
               </ul>
             </div>
@@ -369,10 +364,10 @@ export default function NewDocumentPage() {
               </button>
               <button
                 onClick={handleGenerate}
-                disabled={createMutation.isLoading}
+                disabled={isCreating}
                 className="px-8 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 text-lg font-medium"
               >
-                {createMutation.isLoading ? (
+                {isCreating ? (
                   <>
                     <Loader2 className="h-5 w-5 animate-spin" />
                     <span>Preparing...</span>

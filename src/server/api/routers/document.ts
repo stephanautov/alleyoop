@@ -15,7 +15,7 @@
 import { z } from "zod";
 import { DocumentStatus, DocumentType, Prisma } from "@prisma/client";
 // Import type overrides if they exist
-import "~/types/prisma-overrides";
+import type { } from "~/types/prisma-overrides";
 import {
   createTRPCRouter,
   protectedProcedure,

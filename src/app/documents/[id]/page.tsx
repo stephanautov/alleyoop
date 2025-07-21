@@ -38,9 +38,6 @@ import { DocumentStatus, ExportFormat } from "@prisma/client";
 import { DocumentActions } from "./document-actions";
 import { ExportDropdown } from "./export-dropdown";
 import { DocumentProgress } from "./document-progress";
-import { GenerationProgress } from '~/components/documents/generation-progress';
-import { DocumentList } from "~/components/documents/document-list";
-import { NoDocumentsEmptyState, LoadingState } from "~/components/ui/empty-states";
 
 interface PageProps {
   params: {
@@ -62,6 +59,13 @@ export default async function DocumentDetailPage({ params }: PageProps) {
   }
 
   const config = getDocumentConfig(document.type);
+
+  // Handle the case where config might not be found
+  if (!config) {
+    console.error(`No configuration found for document type: ${document.type}`);
+    notFound();
+  }
+
   const isProcessing =
     document.status === DocumentStatus.PENDING ||
     document.status === DocumentStatus.PROCESSING;
@@ -79,7 +83,7 @@ export default async function DocumentDetailPage({ params }: PageProps) {
           </Link>
         </div>
         <div className="flex items-center gap-2">
-          {document.status === DocumentStatus.COMPLETED && (
+          {document.status === DocumentStatus.COMPLETED && config.exportFormats && (
             <ExportDropdown
               documentId={document.id}
               formats={Array.from(config.exportFormats)}

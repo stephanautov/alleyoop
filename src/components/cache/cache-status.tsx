@@ -1,6 +1,6 @@
 // src/components/cache/cache-status.tsx
 
-'use client';
+"use client";
 
 import { useState } from 'react';
 import {

@@ -1,6 +1,6 @@
 // File: src/components/app-sidebar.tsx (or similar navigation component)
 // ============================================
-
+"use client";
 import {
     Code2,
     FileText,

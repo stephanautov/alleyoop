@@ -1,25 +1,26 @@
 //src/server/auth-compat.ts
 
 /**
- * Compatibility wrapper for NextAuth v5
- * Provides functions expected by DocuForge code
+ * Compatibility wrapper for NextAuth v4 in both Pages and App Router.
+ * Provides a single helper to retrieve the current session in Server Components.
  */
 
-import { auth } from "~/server/auth";
+import { getServerSession as _getServerSession } from "next-auth";
+import { authConfig } from "~/server/auth/config";
 
 /**
- * Get the current user's session
- * Compatible with both server components and API routes
+ * Retrieve the current session inside a Server Component / Route Handler.
+ * Abstracts away the requirement to pass Request/Response objects.
  */
-export const getServerAuthSession = async () => {
-  return await auth();
-};
+export async function getServerAuthSession() {
+    return await _getServerSession(authConfig);
+}
 
-// For legacy code that expects the old getServerSession name
-export const getServerSession = getServerAuthSession;
+// Alias kept for older imports
+export { getServerAuthSession as getServerSession };
 
-// Re-export auth functions for easy access
-export { auth, signIn, signOut } from "~/server/auth";
+// Re-export the config and anything else callers may need
+export { authConfig as authOptions };
 
-// Re-export types
+// Re-export types for convenience
 export type { DefaultSession } from "next-auth";

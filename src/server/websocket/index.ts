@@ -4,7 +4,7 @@ import { Server as HTTPServer } from 'http';
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { parse } from 'url';
 import type { NextApiRequest } from 'next';
-import { getServerAuthSession } from '~/server/auth';
+import { getToken } from 'next-auth/jwt';
 import { Redis } from 'ioredis';
 import { env } from '~/env';
 
@@ -46,16 +46,20 @@ export function setupWebSocketServer(server: HTTPServer): SocketIOServer {
             const cookies = parseCookies(socket.handshake.headers.cookie || '');
             req.cookies = cookies;
 
-            // Get session using NextAuth
-            const session = await getServerAuthSession({ req, res: {} as any });
+            // Verify JWT from cookies
+            const token = await getToken({ req, secret: env.NEXTAUTH_SECRET });
 
-            if (!session?.user?.id) {
+            if (!token?.sub) {
+                if (env.NODE_ENV === 'development') {
+                    // allow anon in dev
+                    socket.data.userId = 'anon';
+                    return next();
+                }
                 return next(new Error('Unauthorized'));
             }
 
-            // Attach user info to socket
-            socket.data.userId = session.user.id;
-            socket.data.userEmail = session.user.email;
+            socket.data.userId = token.sub;
+            socket.data.userEmail = token.email;
 
             next();
         } catch (error) {

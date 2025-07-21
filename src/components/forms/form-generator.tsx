@@ -259,6 +259,24 @@ function renderField<T extends Record<string, any>>(
     innerSchema = def.innerType ?? def.schema;
   }
 
+  // Nested object support
+  if (innerSchema instanceof z.ZodObject) {
+    const shape = (innerSchema as z.ZodObject<any>)._def.shape();
+    return (
+      <div className="grid gap-4 pl-2 border-l">
+        {Object.entries(shape).map(([subKey, subSchema]) => {
+          const nestedName = `${String(fieldName)}.${subKey}`;
+          const nestedConfig = (config as any)?.fields?.[subKey] ?? ({} as any);
+          return (
+            <div key={nestedName}>
+              {renderField(nestedName as any, subSchema as any, form, nestedConfig)}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
   // Array types
   if (innerSchema instanceof z.ZodArray) {
     const itemSchema = innerSchema._def.type;

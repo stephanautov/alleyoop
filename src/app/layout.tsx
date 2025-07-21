@@ -2,71 +2,55 @@
 
 import "~/styles/globals.css";
 import { Inter } from "next/font/google";
-import { TRPCReactProvider } from "~/trpc/react";
-import { Toaster } from "~/components/ui/sonner";
-import { ThemeProvider } from "~/components/theme-provider";
-import type { Metadata } from "next";
-import { SocketProvider } from "~/components/providers/socket-provider";
 import { Navigation, TopNav } from "~/components/layout/navigation";
 import { AppSidebar } from "~/components/app-sidebar";
-import { ClerkProvider } from "@clerk/nextjs";
+import { Providers } from "./_components/providers";
+import type { Metadata } from "next";
 
 const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-sans",
+    subsets: ["latin"],
+    variable: "--font-sans",
 });
 
 export const metadata: Metadata = {
-  title: "AlleyOop - AI Document Generation",
-  description: "Generate professional documents with AI assistance",
-  keywords: ["document generation", "AI", "biography", "business plan", "professional documents"],
-  authors: [{ name: "AlleyOop Team" }],
-  openGraph: {
     title: "AlleyOop - AI Document Generation",
     description: "Generate professional documents with AI assistance",
-    type: "website",
-  },
+    keywords: ["document generation", "AI", "biography", "business plan", "professional documents"],
+    authors: [{ name: "AlleyOop Team" }],
+    openGraph: {
+        title: "AlleyOop - AI Document Generation",
+        description: "Generate professional documents with AI assistance",
+        type: "website",
+    },
 };
 
 export default function RootLayout({
-  children,
+    children,
 }: {
-  children: React.ReactNode;
+    children: React.ReactNode;
 }) {
-  return (
-    <ClerkProvider>
-      <html lang="en" suppressHydrationWarning>
-        <body className={`font-sans ${inter.variable} antialiased`}>
-          <ThemeProvider
-            attribute="class"
-            defaultTheme="system"
-            enableSystem
-            disableTransitionOnChange
-          >
-            <TRPCReactProvider>
-              <SocketProvider>
-                <div className="flex h-screen">
-                  {/* Option 1: Use existing app-sidebar with navigation */}
-                  <AppSidebar />
+    return (
+        <html lang="en" suppressHydrationWarning>
+            <body className={`font-sans ${inter.variable} antialiased`}>
+                <Providers>
+                    <div className="flex h-screen">
+                        {/* Option 1: Use existing app-sidebar with navigation */}
+                        <AppSidebar />
 
-                  {/* Option 2: Use new navigation component */}
-                  {/* <aside className="w-64 border-r bg-background">
-                  <Navigation />
-                </aside> */}
+                        {/* Option 2: Use new navigation component */}
+                        {/* <aside className="w-64 border-r bg-background">
+                    <Navigation />
+                  </aside> */}
 
-                  <div className="flex-1 flex flex-col">
-                    <TopNav />
-                    <main className="flex-1 overflow-y-auto">
-                      {children}
-                    </main>
-                  </div>
-                </div>
-                <Toaster richColors closeButton />
-              </SocketProvider>
-            </TRPCReactProvider>
-          </ThemeProvider>
-        </body>
-      </html>
-    </ClerkProvider>
-  );
+                        <div className="flex-1 flex flex-col">
+                            <TopNav />
+                            <main className="flex-1 overflow-y-auto">
+                                {children}
+                            </main>
+                        </div>
+                    </div>
+                </Providers>
+            </body>
+        </html>
+    );
 }

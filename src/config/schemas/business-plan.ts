@@ -95,4 +95,8 @@ export const businessPlanFieldConfig = {
     label: "Planning Timeframe",
     placeholder: "e.g., 3 years, 5 years",
   },
+  title: {
+    label: "Document Title",
+    placeholder: "My Business Plan",
+  },
 };

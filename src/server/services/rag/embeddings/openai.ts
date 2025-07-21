@@ -2,7 +2,8 @@
 // ============================================
 
 import { OpenAI } from "openai";
-import { encoding_for_model, type TiktokenModel } from "tiktoken";
+// tiktoken WASM is large and fails in some envs; we'll attempt to load dynamically.
+import type { Tiktoken, TiktokenModel } from "tiktoken";
 import { BaseEmbeddingService } from "./base";
 import type { EmbeddingResult } from "../types";
 import { TRPCError } from "@trpc/server";
@@ -10,7 +11,7 @@ import { env } from "~/env";
 
 export class OpenAIEmbeddingService extends BaseEmbeddingService {
     private openai: OpenAI;
-    private encoder: any;
+    private encoder: Tiktoken | null = null;
     private maxBatchSize = 100;
     private maxInputTokens = 8191; // text-embedding-3-small limit
 
@@ -25,13 +26,15 @@ export class OpenAIEmbeddingService extends BaseEmbeddingService {
             apiKey: apiKey || env.OPENAI_API_KEY,
         });
 
-        // Initialize tokenizer
-        try {
-            this.encoder = encoding_for_model("text-embedding-ada-002" as TiktokenModel);
-        } catch {
-            // Fallback for newer models
-            this.encoder = encoding_for_model("gpt-3.5-turbo" as TiktokenModel);
-        }
+        // Lazy-load tiktoken; ignore failure.
+        (async () => {
+            try {
+                const { encoding_for_model } = await import("tiktoken" as any);
+                this.encoder = encoding_for_model("text-embedding-ada-002" as TiktokenModel);
+            } catch (err) {
+                console.warn("tiktoken not available, using approximate token counts", err);
+            }
+        })();
     }
 
     async embedText(text: string): Promise<EmbeddingResult> {
@@ -92,30 +95,33 @@ export class OpenAIEmbeddingService extends BaseEmbeddingService {
     }
 
     countTokens(text: string): number {
-        try {
-            return this.encoder.encode(text).length;
-        } catch {
-            // Fallback estimation: ~4 characters per token
-            return Math.ceil(text.length / 4);
+        if (this.encoder) {
+            try {
+                return this.encoder.encode(text).length;
+            } catch { }
         }
+        // Fallback estimation: ~4 characters per token
+        return Math.ceil(text.length / 4);
     }
 
     private truncateToTokenLimit(text: string): string {
-        const tokens = this.encoder.encode(text);
-
-        if (tokens.length <= this.maxInputTokens) {
-            return text;
+        if (!this.encoder) {
+            // Approximate by character limit (~4 chars per token)
+            const approxLimit = this.maxInputTokens * 4;
+            return text.slice(0, approxLimit);
         }
 
-        // Truncate and decode
+        const tokens = this.encoder.encode(text);
+        if (tokens.length <= this.maxInputTokens) return text;
         const truncatedTokens = tokens.slice(0, this.maxInputTokens);
         return this.encoder.decode(truncatedTokens);
     }
 
     cleanup(): void {
         // Free encoder resources
-        if (this.encoder && typeof this.encoder.free === 'function') {
-            this.encoder.free();
+        if (this.encoder && typeof (this.encoder as any).free === 'function') {
+            (this.encoder as any).free();
         }
+        this.encoder = null;
     }
 }

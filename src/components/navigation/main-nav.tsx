@@ -3,7 +3,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { UserButton, useUser } from "@clerk/nextjs";
+import { useSession, signOut } from "next-auth/react";
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
 import {
@@ -41,7 +41,8 @@ import {
     Code,
     BookOpen,
     Zap,
-    ChevronDown
+    ChevronDown,
+    User
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Sheet, SheetContent, SheetTrigger } from "~/components/ui/sheet";
@@ -106,7 +107,7 @@ const resourcesNav = [
 
 export function MainNav() {
     const pathname = usePathname();
-    const { user, isLoaded } = useUser();
+    const { data: session, status: sessionStatus } = useSession();
     const [isScrolled, setIsScrolled] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [searchOpen, setSearchOpen] = useState(false);
@@ -318,15 +319,13 @@ export function MainNav() {
                     </DropdownMenu>
 
                     {/* User Menu */}
-                    {isLoaded && user ? (
-                        <UserButton
-                            afterSignOutUrl="/"
-                            appearance={{
-                                elements: {
-                                    avatarBox: "h-8 w-8"
-                                }
-                            }}
-                        />
+                    {sessionStatus === "authenticated" && session?.user ? (
+                        <Button asChild variant="ghost" size="sm">
+                            <Link href="/settings">
+                                <User className="mr-2 h-4 w-4" />
+                                {session.user.name}
+                            </Link>
+                        </Button>
                     ) : (
                         <Button asChild variant="ghost" size="sm">
                             <Link href="/sign-in">Sign In</Link>

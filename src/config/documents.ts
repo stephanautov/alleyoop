@@ -7,7 +7,7 @@ import { env } from "~/env";
 import { baseDocumentSchema } from "./schemas/base";
 import { biographySchema } from "./schemas/biography";
 import { caseSummarySchema } from "./schemas/case-summary";
-import { businessPlanSchema } from "./schemas/business-plan";
+import { businessPlanSchema, businessPlanFieldConfig } from "./schemas/business-plan";
 import { medicalReportSchema } from "./schemas/medical-report";
 import { grantProposalSchema } from "./schemas/grant-proposal";
 
@@ -75,6 +75,7 @@ export const DOCUMENT_CONFIGS = {
       { id: "funding_request", name: "Funding Request", order: 8 },
     ],
     exportFormats: ["pdf", "docx", "pptx"],
+    fieldConfig: businessPlanFieldConfig,
     estimatedTokens: {
       short: 3000,
       medium: 6000,

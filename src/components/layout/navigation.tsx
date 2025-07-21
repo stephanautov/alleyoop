@@ -169,7 +169,7 @@ export function Navigation({ className }: NavigationProps) {
                     </button>
                     {isExpanded && (
                         <div className="ml-4 space-y-1">
-                            {item.children.map(child => renderNavItem(child, isMobile))}
+                            {item.children?.map(child => renderNavItem(child, isMobile))}
                         </div>
                     )}
                 </div>
@@ -291,6 +291,7 @@ export function Navigation({ className }: NavigationProps) {
 // Top Navigation Bar Component
 export function TopNav() {
     const [searchOpen, setSearchOpen] = useState(false);
+    const { data: session } = useSession(); // Now session is defined
 
     return (
         <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -302,14 +303,6 @@ export function TopNav() {
                             DocuForge
                         </span>
                     </Link>
-                    {(session?.user?.role === "ADMIN" || session?.user?.role === "DEVELOPER") && (
-                        <Link href="/admin/generators">
-                            <Button variant="ghost">
-                                <Code2 className="h-4 w-4 mr-2" />
-                                Generators
-                            </Button>
-                        </Link>
-                    )}
                 </div>
 
                 <div className="flex flex-1 items-center justify-between space-x-2 md:justify-end">
@@ -328,9 +321,12 @@ export function TopNav() {
                     </div>
 
                     <div className="flex items-center space-x-2">
-                        <Button variant="ghost" size="icon">
-                            <Bell className="h-5 w-5" />
-                        </Button>
+                        {/* Example: Show notifications only for logged-in users */}
+                        {session && (
+                            <Button variant="ghost" size="icon">
+                                <Bell className="h-5 w-5" />
+                            </Button>
+                        )}
                         <UserMenu />
                     </div>
                 </div>
